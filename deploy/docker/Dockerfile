@@ -5,8 +5,15 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV VCPKG_ROOT=/opt/vcpkg
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential cmake ninja-build git curl zip unzip tar \
-    pkg-config ca-certificates libssl-dev \
+    build-essential ninja-build git curl zip unzip tar \
+    pkg-config ca-certificates libssl-dev gpg wget \
+    && wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc \
+    | gpg --dearmor - \
+    | tee /usr/share/keyrings/kitware-archive-keyring.gpg > /dev/null \
+    && echo "deb [signed-by=/usr/share/keyrings/kitware-archive-keyring.gpg] \
+    https://apt.kitware.com/ubuntu/ jammy main" \
+    | tee /etc/apt/sources.list.d/kitware.list \
+    && apt-get update && apt-get install -y --no-install-recommends cmake \
     && rm -rf /var/lib/apt/lists/*
 
 RUN git clone https://github.com/microsoft/vcpkg.git $VCPKG_ROOT \
