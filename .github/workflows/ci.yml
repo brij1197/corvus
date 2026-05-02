@@ -87,7 +87,7 @@ jobs:
       - name: Unit tests
         run: |
           if [ -d tests/unit/python ]; then pytest tests/unit/python -v
-          else echo "No Python unit tests yet — skipping"; fi
+          else echo "No Python unit tests yet - skipping"; fi
 
   integration-test:
     name: Integration tests
@@ -115,8 +115,11 @@ jobs:
 
       - name: Run integration tests
         run: |
-          if [ -d tests/integration ]; then pytest tests/integration -v
-          else echo "No integration tests yet — skipping"; fi
+          if [ -d tests/integration ] && [ -n "$(find tests/integration -name '*.py' | head -1)" ]; then
+            pytest tests/integration -v
+          else
+            echo "No integration tests yet - skipping"
+          fi
 
       - name: Dump logs on failure
         if: failure()
