@@ -94,7 +94,7 @@ Full architecture documentation lives in [`docs/architecture/overview.md`](docs/
 
 ```bash
 # Clone the repo
-git clone https://github.com/<your-username>/corvus.git
+git clone https://github.com/brij1197/corvus.git
 cd corvus
 
 # Start the full stack (databases + observability)
