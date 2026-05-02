@@ -3,7 +3,10 @@
 
 namespace corvus::gateway
 {
+    using HandlerFunc = std::function<void(
+        const drogon::HttpRequestPtr &,
+        std::function<void(const drogon::HttpResponsePtr &)> &&)>;
 
-    drogon::HttpHandlerCb health_handler();
+    HandlerFunc health_handler();
 
 } // namespace corvus::gateway
