@@ -1,0 +1,28 @@
+# Build outputs
+build/
+build-release/
+cmake-build-*/
+
+# vcpkg
+vcpkg_installed/
+
+# Environment
+.env
+
+# IDE
+.vscode/
+.idea/
+*.code-workspace
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+dist/
+
+# Logs
+*.log
