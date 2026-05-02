@@ -5,7 +5,7 @@
 namespace corvus::gateway
 {
 
-    drogon::HttpHandlerCb health_handler()
+    HandlerFunc health_handler()
     {
         return [](const drogon::HttpRequestPtr &req,
                   std::function<void(const drogon::HttpResponsePtr &)> &&callback)
