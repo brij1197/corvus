@@ -38,46 +38,46 @@ Full architecture documentation lives in [`docs/architecture/overview.md`](docs/
 
 ## Technology stack
 
-| Layer | Technology | Purpose |
-|---|---|---|
-| C++ HTTP server | Drogon | API gateway and REST endpoints |
-| C++ build system | CMake + vcpkg | Build and dependency management |
-| C++ DB client | libpqxx | PostgreSQL access |
-| C++ cache client | hiredis | Redis access |
-| C++ metrics | prometheus-cpp | Prometheus `/metrics` endpoint |
-| C++ testing | Google Test | Unit tests |
-| Python CLI | Typer + httpx | Operator command-line interface |
-| Python SDK | httpx + pydantic | Programmatic API client |
-| Python testing | pytest | Integration and end-to-end tests |
-| Primary database | PostgreSQL 16 | System state and configuration |
-| Cache + pub/sub | Redis 7 | Caching and async messaging |
-| Time-series DB | TimescaleDB | Metrics history and audit log |
-| Metrics | Prometheus | Scraping and alerting |
-| Dashboards | Grafana | Visualization and alerting UI |
-| Logging | Loki | Structured log aggregation |
-| Tracing | Jaeger | Distributed trace collection |
-| Containerization | Docker + Compose | Local development stack |
-| Orchestration | Kubernetes | Hybrid cloud deployment |
-| CI/CD | GitHub Actions | Build, test, and image pipeline |
+| Layer            | Technology       | Purpose                          |
+| ---------------- | ---------------- | -------------------------------- |
+| C++ HTTP server  | Drogon           | API gateway and REST endpoints   |
+| C++ build system | CMake + vcpkg    | Build and dependency management  |
+| C++ DB client    | libpqxx          | PostgreSQL access                |
+| C++ cache client | hiredis          | Redis access                     |
+| C++ metrics      | prometheus-cpp   | Prometheus `/metrics` endpoint   |
+| C++ testing      | Google Test      | Unit tests                       |
+| Python CLI       | Typer + httpx    | Operator command-line interface  |
+| Python SDK       | httpx + pydantic | Programmatic API client          |
+| Python testing   | pytest           | Integration and end-to-end tests |
+| Primary database | PostgreSQL 16    | System state and configuration   |
+| Cache + pub/sub  | Redis 7          | Caching and async messaging      |
+| Time-series DB   | TimescaleDB      | Metrics history and audit log    |
+| Metrics          | Prometheus       | Scraping and alerting            |
+| Dashboards       | Grafana          | Visualization and alerting UI    |
+| Logging          | Loki             | Structured log aggregation       |
+| Tracing          | Jaeger           | Distributed trace collection     |
+| Containerization | Docker + Compose | Local development stack          |
+| Orchestration    | Kubernetes       | Hybrid cloud deployment          |
+| CI/CD            | GitHub Actions   | Build, test, and image pipeline  |
 
 ---
 
 ## Project status
 
-| Epic | Status |
-|---|---|
-| C++ project scaffold | Planned |
-| API gateway + auth | Planned |
+| Epic                     | Status  |
+| ------------------------ | ------- |
+| C++ project scaffold     | Planned |
+| API gateway + auth       | Planned |
 | PostgreSQL + Redis layer | Planned |
-| Resource manager domain | Planned |
-| Prometheus + Grafana | Planned |
-| Event bus | Planned |
-| Policy engine | Planned |
-| TimescaleDB + audit log | Planned |
-| Loki + Jaeger tracing | Planned |
-| Python SDK + CLI | Planned |
-| Security hardening | Planned |
-| Documentation + polish | Planned |
+| Resource manager domain  | Planned |
+| Prometheus + Grafana     | Planned |
+| Event bus                | Planned |
+| Policy engine            | Planned |
+| TimescaleDB + audit log  | Planned |
+| Loki + Jaeger tracing    | Planned |
+| Python SDK + CLI         | Planned |
+| Security hardening       | Planned |
+| Documentation + polish   | Planned |
 
 ---
 

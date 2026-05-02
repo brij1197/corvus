@@ -1,0 +1,155 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+
+  cpp-build-test:
+    name: C++ build and unit tests
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential ninja-build git curl zip unzip tar \
+            pkg-config ca-certificates libssl-dev gpg wget
+          # Install CMake 3.28+ from Kitware (Ubuntu 22.04 ships 3.22 which
+          # does not support CMakePresets.json version 6)
+          wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc \
+            | gpg --dearmor - \
+            | sudo tee /usr/share/keyrings/kitware-archive-keyring.gpg > /dev/null
+          echo "deb [signed-by=/usr/share/keyrings/kitware-archive-keyring.gpg] \
+            https://apt.kitware.com/ubuntu/ jammy main" \
+            | sudo tee /etc/apt/sources.list.d/kitware.list
+          sudo apt-get update
+          sudo apt-get install -y cmake
+          cmake --version
+
+      - name: Cache vcpkg
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ github.workspace }}/vcpkg
+            ${{ github.workspace }}/vcpkg_installed
+          key: vcpkg-${{ hashFiles('vcpkg.json') }}
+
+      - name: Bootstrap vcpkg
+        run: |
+          if [ ! -d "${{ github.workspace }}/vcpkg" ]; then
+            git clone https://github.com/microsoft/vcpkg.git
+            ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
+          fi
+        env:
+          VCPKG_ROOT: ${{ github.workspace }}/vcpkg
+
+      - name: Install vcpkg dependencies
+        run: ${{ github.workspace }}/vcpkg/vcpkg install --triplet x64-linux
+        env:
+          VCPKG_ROOT: ${{ github.workspace }}/vcpkg
+
+      - name: Configure CMake
+        run: cmake --preset ci
+        env:
+          VCPKG_ROOT: ${{ github.workspace }}/vcpkg
+
+      - name: Build
+        run: cmake --build build --preset ci
+
+      - name: Run unit tests
+        run: ctest --test-dir build --output-on-failure
+
+  python-test:
+    name: Python lint and unit tests
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install ruff pytest
+          if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
+
+      - name: Lint
+        run: ruff check python/ || true
+
+      - name: Unit tests
+        run: |
+          if [ -d tests/unit/python ]; then pytest tests/unit/python -v
+          else echo "No Python unit tests yet - skipping"; fi
+
+  integration-test:
+    name: Integration tests
+    runs-on: ubuntu-22.04
+    needs: [ cpp-build-test, python-test ]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python test deps
+        run: pip install pytest httpx
+
+      - name: Start stack
+        run: docker compose up -d --build
+        env:
+          POSTGRES_PASSWORD: corvus_ci
+          TIMESCALE_PASSWORD: corvus_ci
+          GRAFANA_PASSWORD: admin
+
+      - name: Wait for health
+        run: bash scripts/wait-for-healthy.sh localhost 8080 30 5
+
+      - name: Run integration tests
+        run: |
+          if [ -d tests/integration ] && [ -n "$(find tests/integration -name '*.py' | head -1)" ]; then
+            pytest tests/integration -v
+          else
+            echo "No integration tests yet - skipping"
+          fi
+
+      - name: Dump logs on failure
+        if: failure()
+        run: docker compose logs
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
+
+  docker-build:
+    name: Docker image build and push
+    runs-on: ubuntu-22.04
+    needs: integration-test
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: deploy/docker/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/corvus-core:latest
+            ghcr.io/${{ github.repository }}/corvus-core:${{ github.sha }}
