@@ -12,12 +12,14 @@ No single language serves both equally well.
 ## Decision
 
 **C++20** owns everything below the REST API boundary:
+
 - API gateway and all middleware
 - Resource manager, event bus, policy engine
 - All database and cache clients (libpqxx, hiredis, prometheus-cpp)
 - Unit tests (Google Test)
 
 **Python 3.12** owns everything above the REST API boundary:
+
 - CLI (`corvus-ctl`) via Typer + httpx
 - Python SDK via httpx + pydantic
 - Integration and end-to-end tests via pytest
