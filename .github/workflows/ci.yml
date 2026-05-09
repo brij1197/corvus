@@ -2,12 +2,11 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
-
   cpp-build-test:
     name: C++ build and unit tests
     runs-on: ubuntu-22.04
@@ -92,7 +91,7 @@ jobs:
   integration-test:
     name: Integration tests
     runs-on: ubuntu-22.04
-    needs: [ cpp-build-test, python-test ]
+    needs: [cpp-build-test, python-test]
     steps:
       - uses: actions/checkout@v4
 
@@ -150,6 +149,9 @@ jobs:
           context: .
           file: deploy/docker/Dockerfile
           push: true
+          build-args: |
+            GIT_SHA=${{ github.sha }}
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
           tags: |
-            ghcr.io/${{ github.repository }}/corvus-core:latest
-            ghcr.io/${{ github.repository }}/corvus-core:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/corvus-core:latest
+            ghcr.io/${{ github.repository_owner }}/corvus-core:${{ github.sha }}
