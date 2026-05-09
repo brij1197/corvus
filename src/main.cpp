@@ -1,9 +1,17 @@
 #include <drogon/drogon.h>
 #include "corvus/gateway/router.h"
 #include "corvus/version.h"
+#include <cstring>
+#include <iostream>
 
-int main()
+int main(int argc, char *argv[])
 {
+    if (argc > 1 && std::strcmp(argv[1], "--health-check") == 0)
+    {
+        std::cout << "ok\n";
+        return 0;
+    }
+
     LOG_INFO << "Corvus " << corvus::version::string() << " starting";
 
     corvus::gateway::register_routes();
