@@ -1,8 +1,7 @@
-enable_testing()
-
 add_executable(corvus-unit-tests
   test_version.cpp
   test_health_handler.cpp
+  test_router.cpp
 )
 
 target_include_directories(corvus-unit-tests PRIVATE
@@ -10,12 +9,21 @@ target_include_directories(corvus-unit-tests PRIVATE
 )
 
 target_link_libraries(corvus-unit-tests PRIVATE
+  corvus-gateway
   GTest::gtest
   GTest::gtest_main
+  GTest::gmock
   Drogon::Drogon
 )
 
 target_compile_features(corvus-unit-tests PRIVATE cxx_std_20)
 
 include(GoogleTest)
-gtest_discover_tests(corvus-unit-tests)
+
+gtest_add_tests(
+  TARGET      corvus-unit-tests
+  SOURCES     test_version.cpp
+              test_health_handler.cpp
+              test_router.cpp
+)
+
