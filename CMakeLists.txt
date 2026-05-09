@@ -38,6 +38,9 @@ find_package(GTest CONFIG REQUIRED)
 # ── Include dirs ───────────────────────────────────────────────────────────
 include_directories(include)
 
+# ── Testing ────────────────────────────────────────────────────────────────
+enable_testing()
+
 # ── Subdirectories ─────────────────────────────────────────────────────────
 add_subdirectory(src)
 add_subdirectory(tests/unit)
