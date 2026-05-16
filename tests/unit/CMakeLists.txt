@@ -2,6 +2,7 @@ add_executable(corvus-unit-tests
   test_version.cpp
   test_health_handler.cpp
   test_router.cpp
+  test_envelope.cpp
 )
 
 target_include_directories(corvus-unit-tests PRIVATE
@@ -10,6 +11,7 @@ target_include_directories(corvus-unit-tests PRIVATE
 
 target_link_libraries(corvus-unit-tests PRIVATE
   corvus-gateway
+  corvus-api
   GTest::gtest
   GTest::gtest_main
   GTest::gmock
@@ -25,5 +27,6 @@ gtest_add_tests(
   SOURCES     test_version.cpp
               test_health_handler.cpp
               test_router.cpp
+              test_envelope.cpp
 )
 
