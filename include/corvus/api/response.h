@@ -5,57 +5,57 @@
 namespace corvus::api
 {
 
-    /// HTTP status codes mapped to each ErrorCode.
-    inline drogon::HttpStatusCode http_status(ErrorCode code)
+  /// HTTP status codes mapped to each ErrorCode.
+  inline drogon::HttpStatusCode http_status(ErrorCode code)
+  {
+    switch (code)
     {
-        switch (code)
-        {
-        case ErrorCode::bad_request:
-        case ErrorCode::unprocessable_entity:
-            return drogon::k400BadRequest;
-        case ErrorCode::unauthorized:
-            return drogon::k401Unauthorized;
-        case ErrorCode::forbidden:
-        case ErrorCode::policy_denied:
-            return drogon::k403Forbidden;
-        case ErrorCode::not_found:
-        case ErrorCode::resource_not_found:
-            return drogon::k404NotFound;
-        case ErrorCode::conflict:
-        case ErrorCode::resource_already_exists:
-            return drogon::k409Conflict;
-        case ErrorCode::too_many_requests:
-            return drogon::k429TooManyRequests;
-        case ErrorCode::quota_exceeded:
-            return drogon::k422UnprocessableEntity;
-        case ErrorCode::internal_error:
-        default:
-            return drogon::k500InternalServerError;
-        }
+    case ErrorCode::bad_request:
+    case ErrorCode::unprocessable_entity:
+      return drogon::k400BadRequest;
+    case ErrorCode::unauthorized:
+      return drogon::k401Unauthorized;
+    case ErrorCode::forbidden:
+    case ErrorCode::policy_denied:
+      return drogon::k403Forbidden;
+    case ErrorCode::not_found:
+    case ErrorCode::resource_not_found:
+      return drogon::k404NotFound;
+    case ErrorCode::conflict:
+    case ErrorCode::resource_already_exists:
+      return drogon::k409Conflict;
+    case ErrorCode::too_many_requests:
+      return drogon::k429TooManyRequests;
+    case ErrorCode::quota_exceeded:
+      return drogon::k422UnprocessableEntity;
+    case ErrorCode::internal_error:
+    default:
+      return drogon::k500InternalServerError;
     }
+  }
 
-    /// Wrap an Envelope into a Drogon HTTP response with correct status code.
-    drogon::HttpResponsePtr to_response(const Envelope &env,
-                                        drogon::HttpStatusCode status);
+  /// Wrap an Envelope into a Drogon HTTP response with correct status code.
+  drogon::HttpResponsePtr to_response(const Envelope &env,
+                                      drogon::HttpStatusCode status);
 
-    /// Convenience: success 200 response.
-    drogon::HttpResponsePtr respond_ok(Json::Value data,
-                                       const std::string &request_id);
+  /// Convenience: success 200 response.
+  drogon::HttpResponsePtr respond_ok(Json::Value data,
+                                     const std::string &request_id);
 
-    /// Convenience: success 201 created response.
-    drogon::HttpResponsePtr respond_created(Json::Value data,
-                                            const std::string &request_id);
+  /// Convenience: success 201 created response.
+  drogon::HttpResponsePtr respond_created(Json::Value data,
+                                          const std::string &request_id);
 
-    /// Convenience: paginated 200 response.
-    drogon::HttpResponsePtr respond_list(Json::Value data,
-                                         const std::string &request_id,
-                                         std::optional<std::string> next_cursor,
-                                         bool has_more);
+  /// Convenience: paginated 200 response.
+  drogon::HttpResponsePtr respond_list(Json::Value data,
+                                       const std::string &request_id,
+                                       std::optional<std::string> next_cursor,
+                                       bool has_more);
 
-    /// Convenience: error response — status derived from ErrorCode.
-    drogon::HttpResponsePtr respond_error(ErrorCode code,
-                                          const std::string &message,
-                                          const std::string &request_id,
-                                          Json::Value details = {});
+  /// Convenience: error response — status derived from ErrorCode.
+  drogon::HttpResponsePtr respond_error(ErrorCode code,
+                                        const std::string &message,
+                                        const std::string &request_id,
+                                        Json::Value details = {});
 
 } // namespace corvus::api
