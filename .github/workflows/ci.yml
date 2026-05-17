@@ -109,6 +109,14 @@ jobs:
           TIMESCALE_PASSWORD: corvus_ci
           GRAFANA_PASSWORD: admin
 
+      - name: Show corvus-core logs
+        run: |
+          sleep 5
+          echo "=== corvus-core logs ==="
+          docker compose logs corvus-core || true
+          echo "=== corvus-core container state ==="
+          docker inspect corvus-corvus-core-1 --format='{{json .State}}' 2>/dev/null || true
+
       - name: Wait for health
         run: bash scripts/wait-for-healthy.sh localhost 8080 30 5
 
