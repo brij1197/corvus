@@ -10,26 +10,27 @@ namespace corvus::gateway
     {
         auto handler = health_handler();
 
+        auto h = health_handler();
         drogon::app().registerHandler(
             "/health",
-            handler,
+            [h](const drogon::HttpRequestPtr &req,
+                std::function<void(const drogon::HttpResponsePtr &)> &&cb)
+            { h(req, std::move(cb)); },
             {drogon::Get});
 
         drogon::app().registerHandler(
             "/ready",
-            handler,
+            [h](const drogon::HttpRequestPtr &req,
+                std::function<void(const drogon::HttpResponsePtr &)> &&cb)
+            { h(req, std::move(cb)); },
             {drogon::Get});
 
-        // v1 API placeholder
-        // Example:
-        //   drogon::app().registerHandler(
-        //       "/v1/resources", resources_handler(), {drogon::Get, drogon::Post});
-
-        // Catch-all 404
-        // Must be registered last — Drogon matches routes in registration order.
+        auto nf = not_found_handler();
         drogon::app().registerHandler(
             "/{catchall}",
-            not_found_handler(),
+            [nf](const drogon::HttpRequestPtr &req,
+                 std::function<void(const drogon::HttpResponsePtr &)> &&cb)
+            { nf(req, std::move(cb)); },
             {drogon::Get, drogon::Post, drogon::Put,
              drogon::Patch, drogon::Delete, drogon::Options});
 

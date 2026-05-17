@@ -11,11 +11,10 @@ namespace corvus::gateway
                   std::function<void(const drogon::HttpResponsePtr &)> &&callback)
         {
             const auto request_id = corvus::api::get_request_id(req);
-            const auto path = req->getPath();
 
             callback(corvus::api::respond_error(
                 corvus::api::ErrorCode::not_found,
-                "The request path '" + path + "' does not exist",
+                "The request path '" + req->getPath() + "' does not exist",
                 request_id));
         };
     }
