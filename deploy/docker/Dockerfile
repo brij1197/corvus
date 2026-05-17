@@ -73,6 +73,9 @@ LABEL org.opencontainers.image.title="corvus-core" \
 COPY --from=builder /build/libs/              /usr/local/lib/
 COPY --from=builder /build/build/src/corvus-core /usr/local/bin/corvus-core
 
+# /tmp is the only writable directory in distroless
+WORKDIR /tmp
+
 EXPOSE 8080
 
 HEALTHCHECK --interval=10s --timeout=3s --start-period=15s --retries=3 \

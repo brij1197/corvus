@@ -17,7 +17,7 @@ int main(int argc, char *argv[])
     corvus::gateway::register_routes();
 
     drogon::app()
-        .setLogPath("./")
+        .setLogPath("")
         .setLogLevel(trantor::Logger::kInfo)
         .addListener("0.0.0.0", 8080)
         .setThreadNum(4)
