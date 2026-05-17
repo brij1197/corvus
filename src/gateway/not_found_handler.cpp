@@ -1,24 +1,21 @@
-#include "corvus/gateway/health_handler.h"
+#include "corvus/gateway/not_found_handler.h"
 #include "corvus/api/response.h"
 #include "corvus/api/request_id.h"
-#include "corvus/version.h"
 
 namespace corvus::gateway
 {
 
-    HandlerFunc health_handler()
+    HandlerFunc not_found_handler()
     {
         return [](const drogon::HttpRequestPtr &req,
                   std::function<void(const drogon::HttpResponsePtr &)> &&callback)
         {
             const auto request_id = corvus::api::get_request_id(req);
 
-            Json::Value body;
-            body["status"] = "ok";
-            body["version"] = std::string{corvus::version::string()};
-            body["path"] = req->getPath();
-
-            callback(corvus::api::respond_ok(body, request_id));
+            callback(corvus::api::respond_error(
+                corvus::api::ErrorCode::not_found,
+                "The request path '" + req->getPath() + "' does not exist",
+                request_id));
         };
     }
 

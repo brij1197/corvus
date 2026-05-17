@@ -62,7 +62,7 @@ ARG GIT_SHA
 
 # ── OCI image labels ───────────────────────────────────────────────────────
 LABEL org.opencontainers.image.title="corvus-core" \
-      org.opencontainers.image.description="Corvus management host — C++ core service" \
+      org.opencontainers.image.description="Corvus management host - C++ core service" \
       org.opencontainers.image.version="${CORVUS_VERSION}" \
       org.opencontainers.image.created="${BUILD_DATE}" \
       org.opencontainers.image.revision="${GIT_SHA}" \
@@ -72,6 +72,9 @@ LABEL org.opencontainers.image.title="corvus-core" \
 # ── Copy shared libs then binary ───────────────────────────────────────────
 COPY --from=builder /build/libs/              /usr/local/lib/
 COPY --from=builder /build/build/src/corvus-core /usr/local/bin/corvus-core
+
+# /tmp is the only writable directory in distroless
+WORKDIR /tmp
 
 EXPOSE 8080
 
