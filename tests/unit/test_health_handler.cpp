@@ -28,13 +28,18 @@ namespace
             result.called = true; });
         return result;
     }
-    Json::Value parse_body(const drogon::HttpResponsePtr &resp)
-    {
 
+    Json::Value parse_envelope(const drogon::HttpResponsePtr &resp)
+    {
         Json::Value root;
         Json::Reader reader;
-        reader.parse(std::string(resp->getBody()), root);
+        reader.parse(std::string{resp->getBody()}, root);
         return root;
+    }
+
+    Json::Value parse_data(const drogon::HttpResponsePtr &resp)
+    {
+        return parse_envelope(resp)["data"];
     }
 
     TEST(HealthHandlerTest, CallbackIsAlwaysInvoked)
@@ -63,38 +68,76 @@ namespace
         EXPECT_EQ(result.response->getStatusCode(), drogon::k200OK);
     }
 
+    // Envelope shape
+
+    TEST(HealthHandlerTest, ResponseHasEnvelopeShape)
+    {
+        const auto result = invoke_handler("/health");
+        ASSERT_TRUE(result.called);
+        const auto env = parse_envelope(result.response);
+        EXPECT_TRUE(env.isMember("data"));
+        EXPECT_TRUE(env.isMember("error"));
+        EXPECT_TRUE(env.isMember("meta"));
+    }
+
+    TEST(HealthHandlerTest, ResponseErrorFieldIsNull)
+    {
+        const auto result = invoke_handler("/health");
+        ASSERT_TRUE(result.called);
+        const auto env = parse_envelope(result.response);
+        EXPECT_TRUE(env["error"].isNull());
+    }
+
+    TEST(HealthHandlerTest, ResponseMetaHasRequestId)
+    {
+        const auto result = invoke_handler("/health");
+        ASSERT_TRUE(result.called);
+        const auto env = parse_envelope(result.response);
+        EXPECT_TRUE(env["meta"].isMember("request_id"));
+        EXPECT_FALSE(env["meta"]["request_id"].asString().empty());
+    }
+
+    TEST(HealthHandlerTest, ResponseMetaHasTimestamp)
+    {
+        const auto result = invoke_handler("/health");
+        ASSERT_TRUE(result.called);
+        const auto env = parse_envelope(result.response);
+        EXPECT_TRUE(env["meta"].isMember("timestamp"));
+        EXPECT_FALSE(env["meta"]["timestamp"].asString().empty());
+    }
+
     TEST(HealthHandlerTest, BodyContainsStatusOk)
     {
         const auto result = invoke_handler("/health");
         ASSERT_TRUE(result.called);
-        const auto body = parse_body(result.response);
-        ASSERT_TRUE(body.isMember("status"));
-        EXPECT_EQ(body["status"].asString(), "ok");
+        const auto data = parse_data(result.response);
+        ASSERT_TRUE(data.isMember("status"));
+        EXPECT_EQ(data["status"].asString(), "ok");
     }
 
     TEST(HealthHandlerTest, BodyStatusIsOkForReadyEndpoint)
     {
         const auto result = invoke_handler("/ready");
         ASSERT_TRUE(result.called);
-        const auto body = parse_body(result.response);
-        EXPECT_EQ(body["status"].asString(), "ok");
+        const auto data = parse_data(result.response);
+        EXPECT_EQ(data["status"].asString(), "ok");
     }
 
     TEST(HealthHandlerTest, BodyContainsVersionField)
     {
         const auto result = invoke_handler("/health");
         ASSERT_TRUE(result.called);
-        const auto body = parse_body(result.response);
-        ASSERT_TRUE(body.isMember("version"));
-        EXPECT_FALSE(body["version"].asString().empty());
+        const auto data = parse_data(result.response);
+        ASSERT_TRUE(data.isMember("version"));
+        EXPECT_FALSE(data["version"].asString().empty());
     }
 
     TEST(HealthHandlerTest, BodyVersionMatchesCurrentVersion)
     {
         const auto result = invoke_handler("/health");
         ASSERT_TRUE(result.called);
-        const auto body = parse_body(result.response);
-        EXPECT_EQ(body["version"].asString(),
+        const auto data = parse_data(result.response);
+        EXPECT_EQ(data["version"].asString(),
                   std::string{corvus::version::string()});
     }
 
@@ -102,34 +145,34 @@ namespace
     {
         const auto result = invoke_handler("/health");
         ASSERT_TRUE(result.called);
-        const auto body = parse_body(result.response);
-        ASSERT_TRUE(body.isMember("path"));
+        const auto data = parse_data(result.response);
+        EXPECT_TRUE(data.isMember("path"));
     }
 
     TEST(HealthHandlerTest, BodyPathMatchesRequestPathForHealth)
     {
         const auto result = invoke_handler("/health");
         ASSERT_TRUE(result.called);
-        const auto body = parse_body(result.response);
-        EXPECT_EQ(body["path"].asString(), "/health");
+        const auto data = parse_data(result.response);
+        EXPECT_EQ(data["path"].asString(), "/health");
     }
 
     TEST(HealthHandlerTest, BodyPathMatchesRequestPathForReady)
     {
         const auto result = invoke_handler("/ready");
         ASSERT_TRUE(result.called);
-        const auto body = parse_body(result.response);
-        EXPECT_EQ(body["path"].asString(), "/ready");
+        const auto data = parse_data(result.response);
+        EXPECT_EQ(data["path"].asString(), "/ready");
     }
 
     TEST(HealthHandlerTest, BodyContainsAllRequiredFields)
     {
         const auto result = invoke_handler("/health");
         ASSERT_TRUE(result.called);
-        const auto body = parse_body(result.response);
-        EXPECT_TRUE(body.isMember("status"));
-        EXPECT_TRUE(body.isMember("version"));
-        EXPECT_TRUE(body.isMember("path"));
+        const auto data = parse_data(result.response);
+        EXPECT_TRUE(data.isMember("status"));
+        EXPECT_TRUE(data.isMember("version"));
+        EXPECT_TRUE(data.isMember("path"));
     }
 
     TEST(HealthHandlerTest, HandlerCanBeInvokedMultipleTimes)

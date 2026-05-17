@@ -62,7 +62,7 @@ ARG GIT_SHA
 
 # ── OCI image labels ───────────────────────────────────────────────────────
 LABEL org.opencontainers.image.title="corvus-core" \
-      org.opencontainers.image.description="Corvus management host — C++ core service" \
+      org.opencontainers.image.description="Corvus management host - C++ core service" \
       org.opencontainers.image.version="${CORVUS_VERSION}" \
       org.opencontainers.image.created="${BUILD_DATE}" \
       org.opencontainers.image.revision="${GIT_SHA}" \
