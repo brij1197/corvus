@@ -61,8 +61,16 @@ jobs:
       - name: Build
         run: cmake --build build --preset ci
 
+      - name: Generate test JWT keypair
+        run: |
+          openssl genrsa -out /tmp/corvus_test.pem 2048
+          openssl rsa -in /tmp/corvus_test.pem -pubout -out /tmp/corvus_test_pub.pem
+
       - name: Run unit tests
         run: ctest --test-dir build --output-on-failure
+        env:
+          CORVUS_TEST_PRIVATE_KEY: ${{ env.CORVUS_TEST_PRIVATE_KEY }}
+          CORVUS_TEST_PUBLIC_KEY: ${{ env.CORVUS_TEST_PUBLIC_KEY }}
 
   python-test:
     name: Python lint and unit tests
@@ -102,12 +110,27 @@ jobs:
       - name: Install Python test deps
         run: pip install pytest httpx
 
+      - name: Generate test JWT keypair
+        run: |
+          openssl genrsa -out /tmp/corvus_test.pem 2048
+          openssl rsa -in /tmp/corvus_test.pem -pubout -out /tmp/corvus_test_pub.pem
+          echo "CORVUS_TEST_PRIVATE_KEY<<EOF_KEY" >> $GITHUB_ENV
+          cat /tmp/corvus_test.pem >> $GITHUB_ENV
+          echo "EOF_KEY" >> $GITHUB_ENV
+          echo "CORVUS_TEST_PUBLIC_KEY<<EOF_KEY" >> $GITHUB_ENV
+          cat /tmp/corvus_test_pub.pem >> $GITHUB_ENV
+          echo "EOF_KEY" >> $GITHUB_ENV
+          echo "CORVUS_JWT_PUBLIC_KEY<<EOF_KEY" >> $GITHUB_ENV
+          cat /tmp/corvus_test_pub.pem >> $GITHUB_ENV
+          echo "EOF_KEY" >> $GITHUB_ENV
+
       - name: Start stack
         run: docker compose up -d --build
         env:
           POSTGRES_PASSWORD: corvus_ci
           TIMESCALE_PASSWORD: corvus_ci
           GRAFANA_PASSWORD: admin
+          CORVUS_JWT_PUBLIC_KEY: ${{ env.CORVUS_JWT_PUBLIC_KEY }}
 
       - name: Show corvus-core logs
         run: |
