@@ -1,21 +1,19 @@
-
-# ── Networks ───────────────────────────────────────────────────────────────
+# Networks
 networks:
   frontend:
   backend:
   datastore:
   observability:
 
-    # ── Volumes ────────────────────────────────────────────────────────────────
+# Volumes
 volumes:
   postgres_data:
   redis_data:
-  timescale_data:
   prometheus_data:
   grafana_data:
   loki_data:
 
-# ── Default resource limits (override per service if needed) ───────────────
+# Default resource limits (override per service if needed)
 x-default-resources: &default-resources
   limits:
     memory: 256m
@@ -24,7 +22,7 @@ x-default-resources: &default-resources
     memory: 64m
 
 services:
-  # ── C++ management core ─────────────────────────────────────────────────
+  # C++ management core
   corvus-core:
     build:
       context: .
@@ -35,6 +33,7 @@ services:
       - CORVUS_ENV=development
       - CORVUS_DB_HOST=postgres
       - CORVUS_REDIS_HOST=redis
+      - CORVUS_JWT_PUBLIC_KEY=${CORVUS_JWT_PUBLIC_KEY}
     depends_on:
       postgres:
         condition: service_healthy
@@ -52,7 +51,7 @@ services:
         reservations:
           memory: 32m
 
-  # ── PostgreSQL ──────────────────────────────────────────────────────────
+  # PostgreSQL - alpine image, minimal config
   postgres:
     image: postgres:16-alpine
     environment:
@@ -70,7 +69,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U corvus"]
+      test: ["CMD-SHELL", "pg_isready -U corvus -d corvus"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -85,7 +84,7 @@ services:
         reservations:
           memory: 32m
 
-  # ── Redis ────────────────────────────────────────────────────────────────
+  # Redis - alpine, AOF disabled for dev (faster, less disk)
   redis:
     image: redis:7-alpine
     command: >
@@ -112,7 +111,7 @@ services:
         reservations:
           memory: 32m
 
-  # ── TimescaleDB ──────────────────────────────────────────────────────────
+  # TimescaleDB - replaced with postgres + timescaledb extension
   timescaledb:
     image: postgres:16-alpine
     environment:
@@ -142,7 +141,7 @@ services:
         reservations:
           memory: 32m
 
-  # ── Prometheus ───────────────────────────────────────────────────────────
+  # Prometheus - short retention, no remote write
   prometheus:
     image: prom/prometheus:latest
     volumes:
@@ -169,7 +168,7 @@ services:
         reservations:
           memory: 64m
 
-  # ── Grafana ──────────────────────────────────────────────────────────────
+  # Grafana - OSS image, minimal plugins
   grafana:
     image: grafana/grafana-oss:latest
     environment:
@@ -198,7 +197,7 @@ services:
         reservations:
           memory: 64m
 
-  # ── Loki ─────────────────────────────────────────────────────────────────
+  #  Loki - filesystem storage, minimal config
   loki:
     image: grafana/loki:latest
     volumes:
@@ -218,7 +217,7 @@ services:
         reservations:
           memory: 32m
 
-  # ── Jaeger ───────────────────────────────────────────────────────────────
+  # Jaeger memory storage only, no persistence needed for dev
   jaeger:
     image: jaegertracing/jaeger:latest
     environment:
