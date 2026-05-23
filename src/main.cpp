@@ -2,6 +2,8 @@
 #include "corvus/gateway/router.h"
 #include "corvus/auth/middleware.h"
 #include "corvus/auth/jwt_validator.h"
+#include "corvus/auth/api_key_middleware.h"
+#include "corvus/auth/api_key_validator.h"
 #include "corvus/version.h"
 #include <cstring>
 #include <iostream>
@@ -15,10 +17,10 @@ int main(int argc, char *argv[])
         return 0;
     }
 
-    std::shared_ptr<corvus::auth::JwtValidator> validator;
+    std::shared_ptr<corvus::auth::JwtValidator> jwt_validator;
     try
     {
-        validator = std::make_shared<corvus::auth::JwtValidator>();
+        jwt_validator = std::make_shared<corvus::auth::JwtValidator>();
     }
     catch (const corvus::auth::JwtConfigError &e)
     {
@@ -26,8 +28,20 @@ int main(int argc, char *argv[])
         return 1;
     }
 
+    std::shared_ptr<corvus::auth::ApiKeyValidator> api_key_validator;
+    try
+    {
+        api_key_validator = std::make_shared<corvus::auth::ApiKeyValidator>();
+    }
+    catch (const corvus::auth::ApiKeyConfigError &e)
+    {
+        std::cerr << "FATAL: " << e.what() << "\n";
+        return 1;
+    }
+
     // Register auth middleware (runs before route handlers)
-    corvus::auth::register_jwt_middleware(validator);
+    corvus::auth::register_jwt_middleware(jwt_validator);
+    corvus::auth::register_api_key_middleware(api_key_validator);
 
     LOG_INFO << "Corvus " << corvus::version::string() << " starting";
 

@@ -2,5 +2,12 @@
   "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg/master/scripts/vcpkg.schema.json",
   "name": "corvus",
   "version": "0.1.0",
-  "dependencies": ["drogon", "gtest", "jwt-cpp", "nlohmann-json"]
+  "dependencies": [
+    "drogon",
+    "gtest",
+    "jwt-cpp",
+    "nlohmann-json",
+    "hiredis",
+    "openssl"
+  ]
 }
