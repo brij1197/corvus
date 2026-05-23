@@ -46,7 +46,7 @@ namespace corvus::auth
         // Retry up to 5 times with 1s backoff — Docker DNS may not resolve
         // immediately even after the Redis healthcheck passes
         std::string last_error;
-        for (int attempt = 1; attempt <= 5; ++attempt)
+        for (int attempt = 1; attempt <= 10; ++attempt)
         {
             try
             {

@@ -43,7 +43,7 @@ services:
     networks:
       - frontend
       - backend
-    restart: unless-stopped
+    restart: on-failure
     deploy:
       resources:
         limits:
@@ -76,7 +76,7 @@ services:
       retries: 5
     networks:
       - datastore
-    restart: unless-stopped
+    restart: on-failure
     deploy:
       resources:
         limits:
@@ -103,7 +103,7 @@ services:
       retries: 5
     networks:
       - datastore
-    restart: unless-stopped
+    restart: on-failure
     deploy:
       resources:
         limits:
@@ -133,7 +133,7 @@ services:
       retries: 5
     networks:
       - datastore
-    restart: unless-stopped
+    restart: on-failure
     deploy:
       resources:
         limits:
@@ -160,7 +160,7 @@ services:
     networks:
       - observability
       - backend
-    restart: unless-stopped
+    restart: on-failure
     deploy:
       resources:
         limits:
@@ -189,7 +189,7 @@ services:
       - prometheus
     networks:
       - observability
-    restart: unless-stopped
+    restart: on-failure
     deploy:
       resources:
         limits:
@@ -209,7 +209,7 @@ services:
       - "3100:3100"
     networks:
       - observability
-    restart: unless-stopped
+    restart: on-failure
     deploy:
       resources:
         limits:
@@ -232,7 +232,7 @@ services:
     networks:
       - observability
       - backend
-    restart: unless-stopped
+    restart: on-failure
     deploy:
       resources:
         limits:
