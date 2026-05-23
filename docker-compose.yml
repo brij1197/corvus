@@ -43,6 +43,7 @@ services:
     networks:
       - frontend
       - backend
+      - datastore
     restart: on-failure
     deploy:
       resources:
