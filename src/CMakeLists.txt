@@ -18,6 +18,7 @@ add_library(corvus-gateway STATIC
   gateway/router.cpp
   gateway/health_handler.cpp
   gateway/not_found_handler.cpp
+  gateway/rate_limiter.cpp
 )
 
 target_include_directories(corvus-gateway PUBLIC
