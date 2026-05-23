@@ -1,9 +1,12 @@
+find_package(hiredis CONFIG REQUIRED)
+
 add_executable(corvus-unit-tests
   test_version.cpp
   test_health_handler.cpp
   test_router.cpp
   test_envelope.cpp
   test_jwt_validator.cpp
+  test_api_key_validator.cpp
 )
 
 target_include_directories(corvus-unit-tests PRIVATE
@@ -18,6 +21,7 @@ target_link_libraries(corvus-unit-tests PRIVATE
   GTest::gtest_main
   GTest::gmock
   Drogon::Drogon
+  hiredis::hiredis
 )
 
 target_compile_features(corvus-unit-tests PRIVATE cxx_std_20)
@@ -31,5 +35,6 @@ gtest_add_tests(
               test_router.cpp
               test_envelope.cpp
               test_jwt_validator.cpp
+              test_api_key_validator.cpp
 )
 

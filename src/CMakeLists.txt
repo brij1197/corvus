@@ -32,10 +32,14 @@ target_link_libraries(corvus-gateway PUBLIC
 target_compile_features(corvus-gateway PUBLIC cxx_std_20)
 
 find_package(jwt-cpp CONFIG REQUIRED)
+find_package(hiredis CONFIG REQUIRED)
+find_package(OpenSSL REQUIRED)
 
 add_library(corvus-auth STATIC
   auth/jwt_validator.cpp
   auth/middleware.cpp
+  auth/api_key_validator.cpp
+  auth/api_key_middleware.cpp
 )
 
 target_include_directories(corvus-auth PUBLIC
@@ -46,6 +50,8 @@ target_link_libraries(corvus-auth PUBLIC
   corvus-api
   Drogon::Drogon  
   jwt-cpp::jwt-cpp
+  hiredis::hiredis
+  OpenSSL::Crypto
 )
 
 target_compile_features(corvus-auth PUBLIC cxx_std_20)

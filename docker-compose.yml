@@ -32,8 +32,9 @@ services:
     environment:
       - CORVUS_ENV=development
       - CORVUS_DB_HOST=postgres
-      - CORVUS_REDIS_HOST=redis
       - CORVUS_JWT_PUBLIC_KEY=${CORVUS_JWT_PUBLIC_KEY}
+      - CORVUS_REDIS_HOST=redis
+      - CORVUS_REDIS_PORT=6379
     depends_on:
       postgres:
         condition: service_healthy
