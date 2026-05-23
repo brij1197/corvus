@@ -1,12 +1,11 @@
 #include "corvus/auth/api_key_validator.h"
 #include <hiredis/hiredis.h>
-#include <openssl/sha.h>
 #include <openssl/evp.h>
 #include <cstdlib>
-#include <cstring>
 #include <sstream>
 #include <iomanip>
-#include <stdexcept>
+#include <thread>
+#include <chrono>
 
 namespace corvus::auth
 {
@@ -44,8 +43,27 @@ namespace corvus::auth
         host_ = (host && *host) ? host : "localhost";
         port_ = (port && *port) ? std::stoi(port) : 6379;
 
-        redisContext *c = connect();
-        redisFree(c);
+        // Retry up to 5 times with 1s backoff — Docker DNS may not resolve
+        // immediately even after the Redis healthcheck passes
+        std::string last_error;
+        for (int attempt = 1; attempt <= 5; ++attempt)
+        {
+            try
+            {
+                redisContext *c = connect();
+                redisFree(c);
+                return; // Connected successfully
+            }
+            catch (const ApiKeyConfigError &e)
+            {
+                last_error = e.what();
+                if (attempt < 5)
+                {
+                    std::this_thread::sleep_for(std::chrono::seconds(1));
+                }
+            }
+        }
+        throw ApiKeyConfigError("Redis unreachable after 5 attempts: " + last_error);
     }
 
     ApiKeyValidator::ApiKeyValidator(const std::string &host, int port)
@@ -59,7 +77,7 @@ namespace corvus::auth
 
     redisContext *ApiKeyValidator::connect() const
     {
-        struct timeval timeout = {1, 500000}; // 1.5 seconds
+        struct timeval timeout = {3, 0}; // 3 seconds
         redisContext *c = redisConnectWithTimeout(host_.c_str(), port_, timeout);
 
         if (!c || c->err)
