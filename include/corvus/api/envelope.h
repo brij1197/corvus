@@ -7,8 +7,6 @@
 namespace corvus::api
 {
 
-  //  ApiError
-
   /// Machine-readable error codes returned in the error envelope.
   /// Add new codes here as the API grows — never use raw strings in handlers.
   enum class ErrorCode
@@ -26,6 +24,7 @@ namespace corvus::api
     resource_invalid_state,
     quota_exceeded,
     policy_denied,
+    payload_too_large,
   };
 
   /// Convert an ErrorCode to its canonical string representation.
@@ -59,17 +58,18 @@ namespace corvus::api
       return "QUOTA_EXCEEDED";
     case ErrorCode::policy_denied:
       return "POLICY_DENIED";
+    case ErrorCode::payload_too_large:
+      return "PAYLOAD_TOO_LARGE";
     default:
       return "UNKNOWN_ERROR";
     }
   }
 
-  /// Structured error returned in the envelope when a request fails.
   struct ApiError
   {
     ErrorCode code;
     std::string message;
-    Json::Value details{Json::objectValue}; // optional extra context
+    Json::Value details{Json::objectValue};
 
     Json::Value to_json() const
     {
@@ -84,15 +84,13 @@ namespace corvus::api
     }
   };
 
-  //  Meta
-
   /// Metadata attached to every response.
   struct Meta
   {
     std::string request_id;
-    std::string timestamp;                  // ISO 8601
-    std::optional<std::string> next_cursor; // pagination
-    std::optional<bool> has_more;           // pagination
+    std::string timestamp; // ISO 8601
+    std::optional<std::string> next_cursor;
+    std::optional<bool> has_more;
 
     Json::Value to_json() const
     {
@@ -134,8 +132,6 @@ namespace corvus::api
       return obj;
     }
   };
-
-  //  Builder helpers
 
   /// Build a success envelope with a data payload.
   Envelope ok(Json::Value data, const std::string &request_id);

@@ -8,6 +8,7 @@ add_executable(corvus-unit-tests
   test_jwt_validator.cpp
   test_api_key_validator.cpp
   test_rate_limiter.cpp
+  test_request_size_limit.cpp
 )
 
 target_include_directories(corvus-unit-tests PRIVATE
@@ -37,5 +38,6 @@ gtest_add_tests(
               test_envelope.cpp
               test_jwt_validator.cpp
               test_api_key_validator.cpp
+              test_request_size_limit.cpp
 )
 
