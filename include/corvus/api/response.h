@@ -28,6 +28,8 @@ namespace corvus::api
       return drogon::k429TooManyRequests;
     case ErrorCode::quota_exceeded:
       return drogon::k422UnprocessableEntity;
+    case ErrorCode::payload_too_large:
+      return drogon::k413RequestEntityTooLarge;
     case ErrorCode::internal_error:
     default:
       return drogon::k500InternalServerError;
@@ -38,21 +40,17 @@ namespace corvus::api
   drogon::HttpResponsePtr to_response(const Envelope &env,
                                       drogon::HttpStatusCode status);
 
-  /// Convenience: success 200 response.
   drogon::HttpResponsePtr respond_ok(Json::Value data,
                                      const std::string &request_id);
 
-  /// Convenience: success 201 created response.
   drogon::HttpResponsePtr respond_created(Json::Value data,
                                           const std::string &request_id);
 
-  /// Convenience: paginated 200 response.
   drogon::HttpResponsePtr respond_list(Json::Value data,
                                        const std::string &request_id,
                                        std::optional<std::string> next_cursor,
                                        bool has_more);
 
-  /// Convenience: error response — status derived from ErrorCode.
   drogon::HttpResponsePtr respond_error(ErrorCode code,
                                         const std::string &message,
                                         const std::string &request_id,
