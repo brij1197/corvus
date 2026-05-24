@@ -149,7 +149,7 @@ namespace corvus::gateway
 
     void register_rate_limit_middleware(std::shared_ptr<RateLimiter> limiter)
     {
-        drogon::app().registerPreHandlingAdvice(
+        drogon::app().registerPreRoutingAdvice(
             [limiter](const drogon::HttpRequestPtr &req,
                       drogon::AdviceCallback &&cb,
                       drogon::AdviceChainCallback &&next)
