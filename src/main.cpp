@@ -1,5 +1,6 @@
 #include <drogon/drogon.h>
 #include "corvus/gateway/router.h"
+#include "corvus/gateway/rate_limiter.h"
 #include "corvus/auth/middleware.h"
 #include "corvus/auth/jwt_validator.h"
 #include "corvus/auth/api_key_middleware.h"
@@ -38,6 +39,9 @@ int main(int argc, char *argv[])
         std::cerr << "FATAL: " << e.what() << "\n";
         return 1;
     }
+
+    auto rate_limiter = std::make_shared<corvus::gateway::RateLimiter>();
+    corvus::gateway::register_rate_limit_middleware(rate_limiter);
 
     // Register auth middleware (runs before route handlers)
     corvus::auth::register_jwt_middleware(jwt_validator);
