@@ -2,6 +2,7 @@
 #include "corvus/gateway/router.h"
 #include "corvus/gateway/rate_limiter.h"
 #include "corvus/gateway/request_size_limit.h"
+#include "corvus/gateway/request_id_middleware.h"
 #include "corvus/auth/middleware.h"
 #include "corvus/auth/jwt_validator.h"
 #include "corvus/auth/api_key_middleware.h"
@@ -43,6 +44,8 @@ int main(int argc, char *argv[])
         return 1;
     }
 
+    corvus::gateway::register_request_id_middleware();
+
     corvus::gateway::register_request_size_limit_middleware();
 
     auto rate_limiter = std::make_shared<corvus::gateway::RateLimiter>();
@@ -71,26 +74,32 @@ int main(int argc, char *argv[])
             {
                 const auto request_id = corvus::api::get_request_id(req);
 
+                drogon::HttpResponsePtr resp;
+
                 if (code == drogon::k404NotFound)
                 {
-                    return corvus::api::respond_error(
+                    resp = corvus::api::respond_error(
                         corvus::api::ErrorCode::not_found,
                         "The requested resource does not exist.",
                         request_id);
                 }
-
-                if (code == drogon::k405MethodNotAllowed)
+                else if (code == drogon::k405MethodNotAllowed)
                 {
-                    return corvus::api::respond_error(
+                    resp = corvus::api::respond_error(
                         corvus::api::ErrorCode::bad_request,
                         "Method not allowed.",
                         request_id);
                 }
+                else
+                {
+                    resp = corvus::api::respond_error(
+                        corvus::api::ErrorCode::internal_error,
+                        "An unexpected error occurred.",
+                        request_id);
+                }
 
-                return corvus::api::respond_error(
-                    corvus::api::ErrorCode::internal_error,
-                    "An unexpected error occurred.",
-                    request_id);
+                resp->addHeader("X-Request-ID", request_id);
+                return resp;
             })
         .run();
 
