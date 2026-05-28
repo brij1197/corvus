@@ -108,7 +108,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install Python test deps
-        run: pip install pytest httpx
+        run: pip install -r requirements-dev.txt
 
       - name: Generate test JWT keypair
         run: |
