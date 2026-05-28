@@ -64,20 +64,31 @@ Full architecture documentation lives in [`docs/architecture/overview.md`](docs/
 
 ## Project status
 
-| Epic                     | Status  |
-| ------------------------ | ------- |
-| C++ project scaffold     | Planned |
-| API gateway + auth       | Planned |
-| PostgreSQL + Redis layer | Planned |
-| Resource manager domain  | Planned |
-| Prometheus + Grafana     | Planned |
-| Event bus                | Planned |
-| Policy engine            | Planned |
-| TimescaleDB + audit log  | Planned |
-| Loki + Jaeger tracing    | Planned |
-| Python SDK + CLI         | Planned |
-| Security hardening       | Planned |
-| Documentation + polish   | Planned |
+| Epic                     | Status      |
+| ------------------------ | ----------- |
+| C++ project scaffold     | ✅ Complete |
+| API gateway + auth       | ✅ Complete |
+| PostgreSQL + Redis layer | Planned     |
+| Resource manager domain  | Planned     |
+| Prometheus + Grafana     | Planned     |
+| Event bus                | Planned     |
+| Policy engine            | Planned     |
+| TimescaleDB + audit log  | Planned     |
+| Loki + Jaeger tracing    | Planned     |
+| Python SDK + CLI         | Planned     |
+| Security hardening       | Planned     |
+| Documentation + polish   | Planned     |
+
+### Epic 2 — API gateway + auth (complete)
+
+- JWT RS256 authentication middleware (`/v1/*` routes)
+- API key validation via Redis hash lookup
+- Token bucket rate limiting (100 req/burst, 10 req/s refill, per-IP)
+- Request size limit enforcement (1 MiB default, 413 JSON envelope)
+- Request ID middleware (UUID v4 injection, `X-Request-ID` echo)
+- Consistent JSON error envelope across all error conditions
+- 97 unit tests (C++ Google Test) + 72 integration tests (Python pytest)
+- ADR-0001 (language split), ADR-0002 (Drogon framework choice)
 
 ---
 
@@ -97,21 +108,34 @@ Full architecture documentation lives in [`docs/architecture/overview.md`](docs/
 git clone https://github.com/brij1197/corvus.git
 cd corvus
 
-# Start the full stack (databases + observability)
+# Generate an RS256 keypair for JWT authentication
+openssl genrsa -out /tmp/corvus_test.pem 2048
+openssl rsa -in /tmp/corvus_test.pem -pubout -out /tmp/corvus_test_pub.pem
+
+# Create a docker-compose.override.yml with the public key
+python3 -c "
+key = open('/tmp/corvus_test_pub.pem').read().strip()
+content = 'services:\n  corvus-core:\n    environment:\n      CORVUS_JWT_PUBLIC_KEY: |-\n'
+for line in key.split('\n'):
+    content += '        ' + line + '\n'
+content += '  redis:\n    ports:\n      - \"6380:6379\"\n'
+open('docker-compose.override.yml', 'w').write(content)
+"
+
+# Start the full stack
 docker compose up -d
 
-# Build the C++ core
-cmake -B build -DCMAKE_BUILD_TYPE=Debug
-cmake --build build --parallel
-
-# Run C++ unit tests
-cd build && ctest --output-on-failure
+# Build and test the C++ core
+cmake --preset default
+cmake --build build -j$(nproc)
+ctest --test-dir build --output-on-failure
 
 # Install Python tooling
 pip install -r requirements-dev.txt
 
 # Run integration tests (requires stack running)
-pytest tests/integration
+export CORVUS_TEST_PRIVATE_KEY="$(cat /tmp/corvus_test.pem)"
+pytest tests/integration -v
 ```
 
 Full local development guide: [`docs/operations/local-dev.md`](docs/operations/local-dev.md)
@@ -170,7 +194,7 @@ corvus/
 
 ## Contributing
 
-This is a personal project built incrementally. Each feature is developed on a branch, validated by CI, and merged via pull request — even as a solo project. See [`docs/operations/local-dev.md`](docs/operations/local-dev.md) for the full development workflow.
+This is a personal project built incrementally. Each feature is developed on a branch, validated by CI, and merged via pull request - even as a solo project. See [`docs/operations/local-dev.md`](docs/operations/local-dev.md) for the full development workflow.
 
 ---
 
