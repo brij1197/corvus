@@ -19,14 +19,16 @@ namespace corvus::auth
                     return;
                 }
 
+                const auto request_id = corvus::api::get_request_id(req);
                 const std::string raw_key = req->getHeader("X-Api-Key");
                 if (raw_key.empty())
                 {
-                    const auto request_id = corvus::api::get_request_id(req);
-                    cb(corvus::api::respond_error(
+                    auto resp = corvus::api::respond_error(
                         corvus::api::ErrorCode::unauthorized,
                         "Missing X-Api-Key header",
-                        request_id));
+                        request_id);
+                    resp->addHeader("X-Request-ID", request_id);
+                    cb(resp);
                     return;
                 }
 
@@ -37,11 +39,12 @@ namespace corvus::auth
                 }
                 catch (const ApiKeyValidationError &e)
                 {
-                    const auto request_id = corvus::api::get_request_id(req);
-                    cb(corvus::api::respond_error(
+                    auto resp = corvus::api::respond_error(
                         corvus::api::ErrorCode::unauthorized,
                         std::string("Invalid API key: ") + e.what(),
-                        request_id));
+                        request_id);
+                    resp->addHeader("X-Request-ID", request_id);
+                    cb(resp);
                 }
             });
     }
