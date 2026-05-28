@@ -18,16 +18,19 @@ namespace corvus::auth
                     return;
                 }
 
+                const auto request_id = corvus::api::get_request_id(req);
+
                 // Extract Bearer token
                 const std::string auth_header = req->getHeader("Authorization");
                 const std::string prefix = "Bearer ";
                 if (auth_header.empty() || auth_header.rfind(prefix, 0) != 0)
                 {
-                    const auto request_id = corvus::api::get_request_id(req);
-                    cb(corvus::api::respond_error(
+                    auto resp = corvus::api::respond_error(
                         corvus::api::ErrorCode::unauthorized,
                         "Missing or malformed Authorization header",
-                        request_id));
+                        request_id);
+                    resp->addHeader("X-Request-ID", request_id);
+                    cb(resp);
                     return;
                 }
 
@@ -35,15 +38,16 @@ namespace corvus::auth
                 try
                 {
                     validator->validate(token);
-                    next(); // Token valid, proceed to the next handler
+                    next();
                 }
                 catch (const JwtValidationError &e)
                 {
-                    const auto request_id = corvus::api::get_request_id(req);
-                    cb(corvus::api::respond_error(
+                    auto resp = corvus::api::respond_error(
                         corvus::api::ErrorCode::unauthorized,
                         std::string("Invalid token: ") + e.what(),
-                        request_id));
+                        request_id);
+                    resp->addHeader("X-Request-ID", request_id);
+                    cb(resp);
                 }
             });
     }

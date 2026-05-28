@@ -28,17 +28,37 @@ namespace corvus::gateway
             {drogon::Get});
 
         auto nf = not_found_handler();
-        drogon::app().setCustomErrorHandler([nf](drogon::HttpStatusCode code, const drogon::HttpRequestPtr &req) -> drogon::HttpResponsePtr
-                                            {
-        if(code ==drogon::k404NotFound){
-            const auto request_id = corvus::api::get_request_id(req);
-            return corvus::api::respond_error(
-                corvus::api::ErrorCode::not_found,
-                "The request path '" + req->getPath() + "' does not exist",
-                request_id);
-            }
+        const std::vector<drogon::internal::HttpConstraint> all_methods = {
+            drogon::Get, drogon::Post, drogon::Put,
+            drogon::Patch, drogon::Delete, drogon::Options};
 
-        return drogon::HttpResponse::newHttpResponse(); });
+        drogon::app().registerHandler(
+            "/{a}",
+            [nf](const drogon::HttpRequestPtr &req,
+                std::function<void(const drogon::HttpResponsePtr &)> &&cb)
+            { nf(req, std::move(cb)); },
+            all_methods);
+
+        drogon::app().registerHandler(
+            "/{a}/{b}",
+            [nf](const drogon::HttpRequestPtr &req,
+                std::function<void(const drogon::HttpResponsePtr &)> &&cb)
+            { nf(req, std::move(cb)); },
+            all_methods);
+
+        drogon::app().registerHandler(
+            "/{a}/{b}/{c}",
+            [nf](const drogon::HttpRequestPtr &req,
+                std::function<void(const drogon::HttpResponsePtr &)> &&cb)
+            { nf(req, std::move(cb)); },
+            all_methods);
+
+        drogon::app().registerHandler(
+            "/{a}/{b}/{c}/{d}",
+            [nf](const drogon::HttpRequestPtr &req,
+                std::function<void(const drogon::HttpResponsePtr &)> &&cb)
+            { nf(req, std::move(cb)); },
+            all_methods);
         LOG_INFO << "Routes registered";
     }
 
