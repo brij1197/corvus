@@ -34,6 +34,24 @@ target_link_libraries(corvus-gateway PUBLIC
 
 target_compile_features(corvus-gateway PUBLIC cxx_std_20)
 
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(LIBPQXX REQUIRED libpqxx)
+
+add_library(corvus-db STATIC
+  db/pg_pool.cpp
+)
+
+target_include_directories(corvus-db PUBLIC
+  ${CMAKE_SOURCE_DIR}/include
+  ${LIBPQXX_INCLUDE_DIRS}
+)
+
+target_link_libraries(corvus-db PUBLIC
+  ${LIBPQXX_LIBRARIES}
+)
+
+target_compile_features(corvus-db PUBLIC cxx_std_20)
+
 find_package(jwt-cpp CONFIG REQUIRED)
 find_package(hiredis CONFIG REQUIRED)
 find_package(OpenSSL REQUIRED)
@@ -66,6 +84,7 @@ add_executable(corvus-core
 target_link_libraries(corvus-core PRIVATE
   corvus-gateway
   corvus-auth
+  corvus-db
 )
 
 target_compile_features(corvus-core PRIVATE cxx_std_20)

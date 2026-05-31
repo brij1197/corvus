@@ -1,4 +1,8 @@
 find_package(hiredis CONFIG REQUIRED)
+find_package(PkgConfig REQUIRED)
+
+pkg_check_modules(LIBPQXX REQUIRED libpqxx)
+
 
 add_executable(corvus-unit-tests
   test_version.cpp
@@ -10,6 +14,7 @@ add_executable(corvus-unit-tests
   test_rate_limiter.cpp
   test_request_size_limit.cpp
   test_request_id.cpp
+  test_pg_pool.cpp
 )
 
 target_include_directories(corvus-unit-tests PRIVATE
@@ -20,11 +25,13 @@ target_link_libraries(corvus-unit-tests PRIVATE
   corvus-gateway
   corvus-api
   corvus-auth
+  corvus-db
   GTest::gtest
   GTest::gtest_main
   GTest::gmock
   Drogon::Drogon
   hiredis::hiredis
+  ${LIBPQXX_LIBRARIES}
 )
 
 target_compile_features(corvus-unit-tests PRIVATE cxx_std_20)
@@ -41,5 +48,6 @@ gtest_add_tests(
               test_api_key_validator.cpp
               test_request_size_limit.cpp
               test_request_id.cpp
+              test_pg_pool.cpp
 )
 
