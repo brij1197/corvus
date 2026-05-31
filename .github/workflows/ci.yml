@@ -42,7 +42,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             build-essential ninja-build git curl zip unzip tar \
-            pkg-config ca-certificates libssl-dev gpg wget
+            pkg-config ca-certificates libssl-dev gpg wget \
+            libpq-dev libpqxx-dev
           # Install CMake 3.28+ from Kitware (Ubuntu 22.04 ships 3.22 which
           # does not support CMakePresets.json version 6)
           wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc \

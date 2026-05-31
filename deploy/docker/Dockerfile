@@ -13,6 +13,7 @@ ENV VCPKG_DISABLE_METRICS=1
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential ninja-build git curl zip unzip tar \
     pkg-config ca-certificates libssl-dev gpg wget \
+    bison flex autoconf python3 libpq-dev libpqxx-dev \
     && wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc \
        | gpg --dearmor - \
        | tee /usr/share/keyrings/kitware-archive-keyring.gpg > /dev/null \
@@ -24,7 +25,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # ── vcpkg — pinned to a release tag for reproducibility ───────────────────
-ARG VCPKG_TAG=2026.04.27
+ARG VCPKG_TAG=master
 RUN git clone --depth 1 --branch ${VCPKG_TAG} \
     https://github.com/microsoft/vcpkg.git $VCPKG_ROOT \
     && $VCPKG_ROOT/bootstrap-vcpkg.sh -disableMetrics
