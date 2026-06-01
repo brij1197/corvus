@@ -39,6 +39,7 @@ pkg_check_modules(LIBPQXX REQUIRED libpqxx)
 
 add_library(corvus-db STATIC
   db/pg_pool.cpp
+  db/migration_runner.cpp
 )
 
 target_include_directories(corvus-db PUBLIC
