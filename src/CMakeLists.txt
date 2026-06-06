@@ -40,6 +40,7 @@ pkg_check_modules(LIBPQXX REQUIRED libpqxx)
 add_library(corvus-db STATIC
   db/pg_pool.cpp
   db/migration_runner.cpp
+  db/redis_connection.cpp
 )
 
 target_include_directories(corvus-db PUBLIC
@@ -49,6 +50,7 @@ target_include_directories(corvus-db PUBLIC
 
 target_link_libraries(corvus-db PUBLIC
   ${LIBPQXX_LIBRARIES}
+  hiredis::hiredis
 )
 
 target_compile_features(corvus-db PUBLIC cxx_std_20)

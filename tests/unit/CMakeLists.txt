@@ -16,6 +16,7 @@ add_executable(corvus-unit-tests
   test_request_id.cpp
   test_pg_pool.cpp
   test_migration_runner.cpp
+  test_redis_connection.cpp
 )
 
 target_include_directories(corvus-unit-tests PRIVATE
@@ -51,5 +52,6 @@ gtest_add_tests(
               test_request_id.cpp
               test_pg_pool.cpp
               test_migration_runner.cpp
+              test_redis_connection.cpp
 )
 
