@@ -105,6 +105,8 @@ namespace corvus::db
 
         const RedisConfig &config() const noexcept { return config_; }
 
+        redisContext *ctx() noexcept { return ctx_; }
+
     private:
         RedisReply command(const char *fmt, ...);
         void check_connection();

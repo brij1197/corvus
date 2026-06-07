@@ -41,6 +41,7 @@ add_library(corvus-db STATIC
   db/pg_pool.cpp
   db/migration_runner.cpp
   db/redis_connection.cpp
+  db/cache_aside.cpp
 )
 
 target_include_directories(corvus-db PUBLIC
