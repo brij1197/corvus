@@ -53,9 +53,10 @@ services:
         reservations:
           memory: 32m
 
-  # PostgreSQL - alpine image, minimal config
+  # PostgreSQL with TimescaleDB extension
+  # used for both relational tables and the audit_log hypertable.
   postgres:
-    image: postgres:16-alpine
+    image: timescale/timescaledb:2.17.2-pg16
     environment:
       POSTGRES_DB: corvus
       POSTGRES_USER: corvus
@@ -63,7 +64,8 @@ services:
       POSTGRES_INITDB_ARGS: "--encoding=UTF8"
     command: >
       postgres
-      -c shared_buffers=32MB
+      -c shared_preload_libraries=timescaledb
+      -c shared_buffers=64MB
       -c max_connections=20
       -c wal_level=minimal
       -c max_wal_senders=0
@@ -81,10 +83,10 @@ services:
     deploy:
       resources:
         limits:
-          memory: 128m
+          memory: 256m
           cpus: "0.5"
         reservations:
-          memory: 32m
+          memory: 64m
 
   # Redis - alpine, AOF disabled for dev (faster, less disk)
   redis:
@@ -110,36 +112,6 @@ services:
         limits:
           memory: 96m
           cpus: "0.25"
-        reservations:
-          memory: 32m
-
-  # TimescaleDB - replaced with postgres + timescaledb extension
-  timescaledb:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_DB: corvus_ts
-      POSTGRES_USER: corvus
-      POSTGRES_PASSWORD: ${TIMESCALE_PASSWORD:-corvus_dev}
-    command: >
-      postgres
-      -c shared_buffers=32MB
-      -c max_connections=10
-      -c synchronous_commit=off
-    volumes:
-      - ./deploy/docker/init-timescale.sh:/docker-entrypoint-initdb.d/init-timescale.sh:ro
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U corvus -d corvus_ts"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    networks:
-      - datastore
-    restart: on-failure
-    deploy:
-      resources:
-        limits:
-          memory: 128m
-          cpus: "0.5"
         reservations:
           memory: 32m
 
