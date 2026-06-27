@@ -79,19 +79,6 @@ Full architecture documentation lives in [`docs/architecture/overview.md`](docs/
 | Security hardening       | Planned     |
 | Documentation + polish   | Planned     |
 
-### Epic 2 — API gateway + auth (complete)
-
-- JWT RS256 authentication middleware (`/v1/*` routes)
-- API key validation via Redis hash lookup
-- Token bucket rate limiting (100 req/burst, 10 req/s refill, per-IP)
-- Request size limit enforcement (1 MiB default, 413 JSON envelope)
-- Request ID middleware (UUID v4 injection, `X-Request-ID` echo)
-- Consistent JSON error envelope across all error conditions
-- 97 unit tests (C++ Google Test) + 72 integration tests (Python pytest)
-- ADR-0001 (language split), ADR-0002 (Drogon framework choice)
-
----
-
 ## Getting started
 
 ### Prerequisites
@@ -119,6 +106,7 @@ content = 'services:\n  corvus-core:\n    environment:\n      CORVUS_JWT_PUBLIC_
 for line in key.split('\n'):
     content += '        ' + line + '\n'
 content += '  redis:\n    ports:\n      - \"6380:6379\"\n'
+content += '  postgres:\n    ports:\n      - \"5433:5432\"\n'
 open('docker-compose.override.yml', 'w').write(content)
 "
 
