@@ -7,6 +7,11 @@ Requires:
   CORVUS_BASE_URL          - defaults to http://localhost:8080
   CORVUS_REDIS_HOST        - defaults to localhost
   CORVUS_REDIS_PORT        - defaults to 6379
+  CORVUS_DB_HOST           - defaults to localhost
+  CORVUS_DB_PORT           - defaults to 5433 (host-exposed Postgres)
+  CORVUS_DB_NAME           - defaults to corvus
+  CORVUS_DB_USER           - defaults to corvus
+  CORVUS_DB_PASSWORD       - defaults to corvus_dev
 """
 
 import os
@@ -15,6 +20,7 @@ import hashlib
 import pytest
 import httpx
 import redis as redis_client
+import psycopg2
 
 from datetime import datetime, timedelta, timezone
 
@@ -27,6 +33,12 @@ BASE_URL = os.environ.get("CORVUS_BASE_URL", "http://localhost:8080")
 REDIS_HOST = os.environ.get("CORVUS_REDIS_HOST", "localhost")
 REDIS_PORT = int(os.environ.get("CORVUS_REDIS_PORT", "6380"))
 PRIVATE_KEY = os.environ.get("CORVUS_TEST_PRIVATE_KEY", "")
+
+DB_HOST = os.environ.get("CORVUS_DB_HOST", "localhost")
+DB_PORT = int(os.environ.get("CORVUS_DB_PORT", "5433"))
+DB_NAME = os.environ.get("CORVUS_DB_NAME", "corvus")
+DB_USER = os.environ.get("CORVUS_DB_USER", "corvus")
+DB_PASSWORD = os.environ.get("CORVUS_DB_PASSWORD", "corvus_dev")
 
 
 def make_jwt(
@@ -86,6 +98,35 @@ def redis() -> redis_client.Redis:
     except Exception as e:
         pytest.skip(f"Redis not reachable at {REDIS_HOST}:{REDIS_PORT} - {e}")
     return r
+
+
+@pytest.fixture(scope="session")
+def pg_conn():
+    """Session-scoped PostgreSQL connection for integration tests."""
+
+    try:
+        conn = psycopg2.connect(
+            host=DB_HOST,
+            port=DB_PORT,
+            dbname=DB_NAME,
+            user=DB_USER,
+            password=DB_PASSWORD,
+            connect_timeout=5,
+        )
+        conn.autocommit = True
+    except Exception as e:
+        pytest.skip(f"Postgres not reachable at {DB_HOST}:{DB_PORT} - {e}")
+        return
+    yield conn
+    conn.close()
+
+
+@pytest.fixture
+def pg_cursor(pg_conn):
+    """ "Fresh cursor per test. Cleaned up on teardown."""
+    cur = pg_conn.cursor()
+    yield cur
+    cur.close()
 
 
 @pytest.fixture(scope="session")
