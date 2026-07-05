@@ -30,6 +30,39 @@
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
       }
+    },
+    {
+      "name": "asan",
+      "displayName": "ASan + UBSan",
+      "description": "AddressSanitizer + UndefinedBehaviorSanitizer debug build",
+      "binaryDir": "${sourceDir}/build-asan",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CORVUS_SANITIZER": "asan",
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+      }
+    },
+    {
+      "name": "tsan",
+      "displayName": "TSan + UBSan",
+      "description": "ThreadSanitizer + UndefinedBehaviorSanitizer debug build",
+      "binaryDir": "${sourceDir}/build-tsan",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CORVUS_SANITIZER": "tsan",
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+      }
+    },
+    {
+      "name": "coverage",
+      "displayName": "Coverage",
+      "description": "gcov-instrumented debug build",
+      "binaryDir": "${sourceDir}/build-coverage",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CORVUS_SANITIZER": "coverage",
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+      }
     }
   ],
   "buildPresets": [
@@ -42,12 +75,42 @@
       "name": "ci",
       "configurePreset": "ci",
       "jobs": 4
+    },
+    {
+      "name": "asan",
+      "configurePreset": "asan",
+      "jobs": 4
+    },
+    {
+      "name": "tsan",
+      "configurePreset": "tsan",
+      "jobs": 4
+    },
+    {
+      "name": "coverage",
+      "configurePreset": "coverage",
+      "jobs": 4
     }
   ],
   "testPresets": [
     {
       "name": "default",
       "configurePreset": "default",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "asan",
+      "configurePreset": "asan",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "tsan",
+      "configurePreset": "tsan",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "coverage",
+      "configurePreset": "coverage",
       "output": { "outputOnFailure": true }
     }
   ]

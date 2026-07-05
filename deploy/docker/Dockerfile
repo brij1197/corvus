@@ -13,7 +13,7 @@ ENV VCPKG_DISABLE_METRICS=1
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential ninja-build git curl zip unzip tar \
     pkg-config ca-certificates libssl-dev gpg wget \
-    bison flex autoconf python3 libpq-dev libpqxx-dev \
+    bison flex autoconf python3 python3-pip libpq-dev libpqxx-dev \
     && wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc \
        | gpg --dearmor - \
        | tee /usr/share/keyrings/kitware-archive-keyring.gpg > /dev/null \
@@ -22,7 +22,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
        | tee /etc/apt/sources.list.d/kitware.list \
     && apt-get update \
     && apt-get install -y --no-install-recommends cmake \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && pip3 install --no-cache-dir gcovr
 
 # ── vcpkg — pinned to a release tag for reproducibility ───────────────────
 ARG VCPKG_TAG=master
@@ -32,7 +33,7 @@ RUN git clone --depth 1 --branch ${VCPKG_TAG} \
 
 WORKDIR /build
 
-# ── Dependency layer — cached as long as vcpkg.json does not change ───────
+# ── Dependency layer - cached as long as vcpkg.json does not change ───────
 COPY vcpkg.json .
 RUN $VCPKG_ROOT/vcpkg install --triplet x64-linux
 
@@ -43,16 +44,29 @@ COPY include/ include/
 COPY tests/   tests/
 
 # ── Build ──────────────────────────────────────────────────────────────────
-RUN cmake --preset ci \
-    && cmake --build build --preset ci \
-    && strip build/src/corvus-core
+# CMAKE_PRESET selects which CMakePresets.json entry to build:
+#   ci        (default) - Release build, produces the runtime binary below
+#   asan      - ASan + UBSan instrumented debug build (tests only)
+#   tsan      - TSan + UBSan instrumented debug build (tests only)
+#   coverage  - gcov-instrumented debug build (tests only)
+# Only "ci" is stripped/copied into the runtime image - the others are
+# built and run from the builder stage directly via `docker run`.
+ARG CMAKE_PRESET=ci
+RUN cmake --preset ${CMAKE_PRESET} \
+    && cmake --build --preset ${CMAKE_PRESET} \
+    && if [ "${CMAKE_PRESET}" = "ci" ]; then strip build/src/corvus-core; fi
 
 # ── Collect shared library dependencies ───────────────────────────────────
+# Only meaningful for the "ci" preset - asan/tsan/coverage builds are test
+# binaries run directly inside the builder container and never reach the
+# runtime stage.
 RUN mkdir -p /build/libs \
-    && ldd /build/build/src/corvus-core \
-       | awk '/=>/ { print $3 }' \
-       | grep -v "^$" \
-       | xargs -I{} cp --no-clobber {} /build/libs/ || true
+    && if [ "${CMAKE_PRESET}" = "ci" ]; then \
+         ldd /build/build/src/corvus-core \
+           | awk '/=>/ { print $3 }' \
+           | grep -v "^$" \
+           | xargs -I{} cp --no-clobber {} /build/libs/ || true; \
+       fi
 
 # ── Stage 2: distroless runtime ────────────────────────────────────────────
 FROM gcr.io/distroless/cc-debian12:nonroot AS runtime
