@@ -41,5 +41,5 @@ namespace corvus::resources
 
     private:
         std::shared_ptr<db::PgPool> pool_;
-    }
+    };
 } // namespace corvus::resources

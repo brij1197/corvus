@@ -8,7 +8,8 @@ namespace corvus::resources
     {
         std::string timestamp_select(const std::string &column)
         {
-            return "to_char(" + column + " AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"')";
+            return "to_char(" + column +
+                   " AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"')";
         }
 
         std::string select_columns()
@@ -35,23 +36,35 @@ namespace corvus::resources
             "abcdefghijklmnopqrstuvwxyz"
             "0123456789+/";
 
+        unsigned char to_uchar(char c)
+        {
+            return static_cast<unsigned char>(c);
+        }
+
         std::string base64_encode(const std::string &in)
         {
             std::string out;
             int val = 0, bits = -6;
-            for (unsigned char c : in)
+            for (std::size_t i = 0; i < in.size(); ++i)
             {
-                val = (val << 8) + c;
+                const unsigned char c = to_uchar(in[i]);
+                val = (val << 8) + static_cast<int>(c);
                 bits += 8;
                 while (bits >= 0)
                 {
-                    out.push_back(kBase64Chars[(val >> bits) & 0x3F]);
+                    const std::size_t idx =
+                        static_cast<std::size_t>((val >> bits) & 0x3F);
+                    out.push_back(kBase64Chars[idx]);
                     bits -= 6;
                 }
             }
             if (bits > -6)
-                out.push_back(kBase64Chars[((val << 8) >> (bits + 8)) & 0x3F]);
-            while (out.size() % 4)
+            {
+                const std::size_t idx =
+                    static_cast<std::size_t>(((val << 8) >> (bits + 8)) & 0x3F);
+                out.push_back(kBase64Chars[idx]);
+            }
+            while (out.size() % 4 != 0)
                 out.push_back('=');
             return out;
         }
@@ -59,16 +72,20 @@ namespace corvus::resources
         std::string base64_decode(const std::string &in)
         {
             std::vector<int> table(256, -1);
-            for (int i = 0; i < 64; ++i)
-                table[static_cast<unsigned char>(kBase64Chars[i])] = i;
+            for (std::size_t i = 0; i < kBase64Chars.size(); ++i)
+            {
+                const std::size_t key = to_uchar(kBase64Chars[i]);
+                table[key] = static_cast<int>(i);
+            }
 
             std::string out;
             int val = 0, bits = -8;
-            for (unsigned char c : in)
+            for (std::size_t i = 0; i < in.size(); ++i)
             {
-                if (c == '-' || table[static_case<unsigned char>(c)] == -1)
+                const unsigned char c = to_uchar(in[i]);
+                if (c == '=' || table[c] == -1)
                     continue;
-                val = (val << 6) + table[static_cast<unsigned char>(c)];
+                val = (val << 6) + table[c];
                 bits += 6;
                 if (bits >= 0)
                 {
@@ -113,7 +130,7 @@ namespace corvus::resources
         const auto metadata_val = req.metadata.value_or(nlohmann::json::object()).dump();
 
         const auto query =
-            "INSERT INTO resources (client_ud, kind, name, status, metadata) "
+            "INSERT INTO resources (client_id, kind, name, status, metadata) "
             "VALUES ($1, $2, $3, $4, $5::jsonb) "
             "RETURNING " +
             select_columns();
@@ -177,10 +194,13 @@ namespace corvus::resources
         txn.commit();
 
         ListResult out;
-        const bool has_more = result.size() > static_cast<std::size_t>(page_size);
-        const auto count = has_more ? page_size : static_cast<int>(result.size());
+        const auto result_size = result.size();
+        const bool has_more =
+            result_size > static_cast<pqxx::result::size_type>(page_size);
+        const pqxx::result::size_type count =
+            has_more ? static_cast<pqxx::result::size_type>(page_size) : result_size;
 
-        for (int i = 0; i < count; ++i)
+        for (pqxx::result::size_type i = 0; i < count; ++i)
             out.items.push_back(row_to_resource(result[i]));
 
         out.has_more = has_more;

@@ -11,12 +11,6 @@ using namespace corvus::db;
 namespace
 {
 
-    std::string env_or(const char *var, const char *fallback)
-    {
-        const char *v = std::getenv(var);
-        return (v && *v) ? v : fallback;
-    }
-
     std::string random_uuid_like()
     {
         static std::random_device rd;
