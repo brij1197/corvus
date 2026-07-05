@@ -1,0 +1,99 @@
+name: "CodeQL"
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly scan catches new CodeQL query packs / advisories even when
+    # nothing in the repo has changed. Offset time avoids the top-of-hour
+    # thundering herd across GitHub's CodeQL runners.
+    - cron: "23 4 * * 1"
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-22.04
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: cpp
+            build-mode: manual
+          - language: python
+            build-mode: none
+          - language: actions
+            build-mode: none
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+
+      - name: Install system dependencies
+        if: matrix.language == 'cpp'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential ninja-build git curl zip unzip tar \
+            pkg-config ca-certificates libssl-dev gpg wget \
+            libpq-dev libpqxx-dev
+          wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc \
+            | gpg --dearmor - \
+            | sudo tee /usr/share/keyrings/kitware-archive-keyring.gpg > /dev/null
+          echo "deb [signed-by=/usr/share/keyrings/kitware-archive-keyring.gpg] \
+            https://apt.kitware.com/ubuntu/ jammy main" \
+            | sudo tee /etc/apt/sources.list.d/kitware.list
+          sudo apt-get update
+          sudo apt-get install -y cmake
+
+      - name: Cache vcpkg
+        if: matrix.language == 'cpp'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ github.workspace }}/vcpkg
+            ${{ github.workspace }}/vcpkg_installed
+          key: vcpkg-${{ hashFiles('vcpkg.json') }}
+
+      - name: Bootstrap vcpkg
+        if: matrix.language == 'cpp'
+        run: |
+          if [ ! -d "${{ github.workspace }}/vcpkg" ]; then
+            git clone https://github.com/microsoft/vcpkg.git
+            ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
+          fi
+        env:
+          VCPKG_ROOT: ${{ github.workspace }}/vcpkg
+
+      - name: Install vcpkg dependencies
+        if: matrix.language == 'cpp'
+        run: ${{ github.workspace }}/vcpkg/vcpkg install --triplet x64-linux
+        env:
+          VCPKG_ROOT: ${{ github.workspace }}/vcpkg
+
+      - name: Configure CMake
+        if: matrix.language == 'cpp'
+        run: cmake --preset ci
+        env:
+          VCPKG_ROOT: ${{ github.workspace }}/vcpkg
+
+      - name: Build (traced by CodeQL)
+        if: matrix.language == 'cpp'
+        run: cmake --build build --preset ci
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
