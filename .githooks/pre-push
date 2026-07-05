@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Pre-push hook: runs the fast unit test suite before allowing a push.
+#
+# Enable with:
+#   git config core.hooksPath .githooks
+#   chmod +x .githooks/pre-push
+
+set -euo pipefail
+
+echo "── Running fast unit tests before push ──"
+
+if ! make test; then
+    echo ""
+    echo "✗ Unit tests failed. Push aborted."
+    echo "  Fix the failures above, or run 'git push --no-verify' to skip"
+    echo "  this check (not recommended)."
+    exit 1
+fi
+
+echo "✓ Unit tests passed — proceeding with push."
