@@ -30,6 +30,7 @@ target_link_libraries(corvus-unit-tests PRIVATE
   corvus-api
   corvus-auth
   corvus-db
+  corvus-resources
   GTest::gtest
   GTest::gtest_main
   GTest::gmock

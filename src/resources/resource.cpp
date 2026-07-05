@@ -84,7 +84,7 @@ namespace corvus::resources
             if (!body[field].is_object())
                 throw ResourceValidationError(
                     field + " must be a JSON object");
-            return body[field];
+            return std::optional<nlohmann::json>(body[field]);
         }
 
     } // namespace
