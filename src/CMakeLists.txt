@@ -61,14 +61,17 @@ find_package(nlohmann_json CONFIG REQUIRED)
 
 add_library(corvus-resources STATIC
   resources/resource.cpp
+  resources/resource_repository.cpp
 )
 
 target_include_directories(corvus-resources PUBLIC
   ${CMAKE_SOURCE_DIR}/include
+  ${LIBPQXX_INCLUDE_DIRS}
 )
 
 target_link_libraries(corvus-resources PUBLIC
   nlohmann_json::nlohmann_json
+  ${LIBPQXX_LIBRARIES}
 )
 
 target_compile_features(corvus-resources PUBLIC cxx_std_20)
