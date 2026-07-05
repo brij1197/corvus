@@ -18,6 +18,7 @@ add_executable(corvus-unit-tests
   test_migration_runner.cpp
   test_redis_connection.cpp
   test_cache_aside.cpp
+  test_resource_model.cpp
 )
 
 target_include_directories(corvus-unit-tests PRIVATE
@@ -29,6 +30,7 @@ target_link_libraries(corvus-unit-tests PRIVATE
   corvus-api
   corvus-auth
   corvus-db
+  corvus-resources
   GTest::gtest
   GTest::gtest_main
   GTest::gmock
@@ -55,5 +57,6 @@ gtest_add_tests(
               test_migration_runner.cpp
               test_redis_connection.cpp
               test_cache_aside.cpp
+              test_resource_model.cpp
 )
 
