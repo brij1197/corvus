@@ -103,6 +103,20 @@ namespace corvus::resources
         };
     }
 
+    Resource from_json(const nlohmann::json &j)
+    {
+        Resource r;
+        r.id = j.at("id").get<std::string>();
+        r.client_id = j.at("client_id").get<std::string>();
+        r.kind = j.at("kind").get<std::string>();
+        r.name = j.at("name").get<std::string>();
+        r.status = j.at("status").get<std::string>();
+        r.metadata = j.at("metadata");
+        r.created_at = j.at("created_at").get<std::string>();
+        r.updated_at = j.at("updated_at").get<std::string>();
+        return r;
+    }
+
     CreateResourceRequest parse_create_request(const nlohmann::json &body)
     {
         if (!body.is_object())
