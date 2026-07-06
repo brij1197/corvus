@@ -41,10 +41,10 @@ namespace corvus::resources
 
         if (!cached)
             throw ResourceNotFound("Resource not found: " + id);
-        return from_json(nlohmann::json :; parse(*cached));
+        return from_json(nlohmann::json ::parse(*cached));
     }
 
-    ListResult ResourceService::list(const std::string &client_id, const ListFilter, &filter)
+    ListResult ResourceService::list(const std::string &client_id, const ListFilter &filter)
     {
         return repository_->list(client_id, filter);
     }
