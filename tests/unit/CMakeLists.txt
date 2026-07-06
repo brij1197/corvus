@@ -20,6 +20,7 @@ add_executable(corvus-unit-tests
   test_cache_aside.cpp
   test_resource_model.cpp
   test_resource_repository.cpp
+  test_resource_service.cpp
 )
 
 target_include_directories(corvus-unit-tests PRIVATE
@@ -60,5 +61,6 @@ gtest_add_tests(
               test_cache_aside.cpp
               test_resource_model.cpp
               test_resource_repository.cpp
+              test_resource_service.cpp
 )
 

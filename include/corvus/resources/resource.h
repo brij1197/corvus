@@ -31,6 +31,8 @@ namespace corvus::resources
 
     nlohmann::json to_json(const Resource &r);
 
+    Resource from_json(const nlohmann::json &j);
+
     struct CreateResourceRequest
     {
         std::string kind;
