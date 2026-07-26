@@ -1,4 +1,5 @@
 #include "corvus/auth/api_key_middleware.h"
+#include "corvus/auth/client_context.h"
 #include "corvus/api/response.h"
 #include "corvus/api/request_id.h"
 #include <drogon/drogon.h>
@@ -34,14 +35,19 @@ namespace corvus::auth
 
                 try
                 {
-                    validator->validate(raw_key);
+                    const ApiKeyInfo info = validator->validate(raw_key);
+                    req->getAttributes()->insert(kClientIdKey, info.client_id);
+
                     next();
                 }
                 catch (const ApiKeyValidationError &e)
                 {
+                    LOG_DEBUG << "API key rejected (request_id=" << request_id
+                              << "): " << e.what();
+
                     auto resp = corvus::api::respond_error(
                         corvus::api::ErrorCode::unauthorized,
-                        std::string("Invalid API key: ") + e.what(),
+                        "Invalid or expired API key",
                         request_id);
                     resp->addHeader("X-Request-ID", request_id);
                     cb(resp);

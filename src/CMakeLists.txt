@@ -85,6 +85,7 @@ add_library(corvus-auth STATIC
   auth/middleware.cpp
   auth/api_key_validator.cpp
   auth/api_key_middleware.cpp
+  auth/client_context.cpp
 )
 
 target_include_directories(corvus-auth PUBLIC

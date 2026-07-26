@@ -42,9 +42,11 @@ namespace corvus::auth
                 }
                 catch (const JwtValidationError &e)
                 {
+                    LOG_DEBUG << "JWT rejected (request_id=" << request_id
+                              << "): " << e.what();
                     auto resp = corvus::api::respond_error(
                         corvus::api::ErrorCode::unauthorized,
-                        std::string("Invalid token: ") + e.what(),
+                        "Invalid or expired token",
                         request_id);
                     resp->addHeader("X-Request-ID", request_id);
                     cb(resp);

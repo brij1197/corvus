@@ -45,6 +45,11 @@ namespace corvus::auth
         try
         {
             auto decoded = jwt::decode<jwt_traits>(token);
+            if (!decoded.has_expires_at())
+            {
+                throw JwtValidationError("Token is missing required 'exp' claim");
+            }
+
             jwt::verify<jwt_traits>(jwt::default_clock{})
                 .allow_algorithm(jwt::algorithm::rs256{public_key_pem_})
                 .with_type("JWT")
@@ -60,6 +65,10 @@ namespace corvus::auth
                 claims.issuer = decoded.get_issuer();
             }
             return claims;
+        }
+        catch (const JwtValidationError &)
+        {
+            throw;
         }
         catch (const jwt::error::token_verification_exception &e)
         {
