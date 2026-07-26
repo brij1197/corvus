@@ -91,6 +91,9 @@ TEST_F(JwtValidatorTest, RejectsExpiredToken)
 
 TEST_F(JwtValidatorTest, RejectsTokenWithNoExpClaim)
 {
+    // jwt-cpp verifies exp only if the claim is present, so a token minted
+    // without one would otherwise be accepted as never-expiring. Guards the
+    // explicit has_expires_at() check in JwtValidator::validate.
     corvus::auth::JwtValidator v{public_key_};
     const auto no_exp_token =
         jwt::create<jwt_traits>()
@@ -98,6 +101,7 @@ TEST_F(JwtValidatorTest, RejectsTokenWithNoExpClaim)
             .set_issuer("corvus-test")
             .set_subject("alice")
             .sign(jwt::algorithm::rs256{public_key_, private_key_});
+
     EXPECT_THROW(v.validate(no_exp_token), corvus::auth::JwtValidationError);
 }
 

@@ -45,8 +45,9 @@ namespace corvus::auth
 
         // Retry up to 5 times with 1s backoff — Docker DNS may not resolve
         // immediately even after the Redis healthcheck passes
+        constexpr int kMaxAttempts = 5;
         std::string last_error;
-        for (int attempt = 1; attempt <= 10; ++attempt)
+        for (int attempt = 1; attempt <= kMaxAttempts; ++attempt)
         {
             try
             {
@@ -57,13 +58,15 @@ namespace corvus::auth
             catch (const ApiKeyConfigError &e)
             {
                 last_error = e.what();
-                if (attempt < 5)
+                if (attempt < kMaxAttempts)
                 {
                     std::this_thread::sleep_for(std::chrono::seconds(1));
                 }
             }
         }
-        throw ApiKeyConfigError("Redis unreachable after 5 attempts: " + last_error);
+        throw ApiKeyConfigError(
+            "Redis unreachable after " + std::to_string(kMaxAttempts) +
+            " attempts: " + last_error);
     }
 
     ApiKeyValidator::ApiKeyValidator(const std::string &host, int port)
@@ -135,8 +138,16 @@ namespace corvus::auth
         ApiKeyInfo info;
         for (size_t i = 0; i + 1 < reply->elements; i += 2)
         {
-            std::string field = reply->element[i]->str;
-            std::string value = reply->element[i + 1]->str;
+            const redisReply *field_reply = reply->element[i];
+            const redisReply *value_reply = reply->element[i + 1];
+            if (!field_reply || !field_reply->str ||
+                !value_reply || !value_reply->str)
+            {
+                continue;
+            }
+
+            const std::string field = field_reply->str;
+            const std::string value = value_reply->str;
             if (field == "client_id")
                 info.client_id = value;
             else if (field == "scopes")

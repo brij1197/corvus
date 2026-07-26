@@ -1,5 +1,9 @@
 name: CI
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches: [main]
@@ -7,6 +11,7 @@ on:
       - "src/**"
       - "include/**"
       - "tests/**"
+      - "db/**"
       - "python/**"
       - "CMakeLists.txt"
       - "vcpkg.json"
@@ -21,6 +26,7 @@ on:
       - "src/**"
       - "include/**"
       - "tests/**"
+      - "db/**"
       - "python/**"
       - "CMakeLists.txt"
       - "vcpkg.json"
@@ -90,12 +96,15 @@ jobs:
         run: |
           openssl genrsa -out /tmp/corvus_test.pem 2048
           openssl rsa -in /tmp/corvus_test.pem -pubout -out /tmp/corvus_test_pub.pem
+          echo "CORVUS_TEST_PRIVATE_KEY<<EOF_KEY" >> $GITHUB_ENV
+          cat /tmp/corvus_test.pem >> $GITHUB_ENV
+          echo "EOF_KEY" >> $GITHUB_ENV
+          echo "CORVUS_TEST_PUBLIC_KEY<<EOF_KEY" >> $GITHUB_ENV
+          cat /tmp/corvus_test_pub.pem >> $GITHUB_ENV
+          echo "EOF_KEY" >> $GITHUB_ENV
 
       - name: Run unit tests
         run: ctest --test-dir build --output-on-failure
-        env:
-          CORVUS_TEST_PRIVATE_KEY: ${{ env.CORVUS_TEST_PRIVATE_KEY }}
-          CORVUS_TEST_PUBLIC_KEY: ${{ env.CORVUS_TEST_PUBLIC_KEY }}
 
   python-test:
     name: Python lint and unit tests
@@ -153,7 +162,6 @@ jobs:
         run: docker compose up -d --build
         env:
           POSTGRES_PASSWORD: corvus_ci
-          TIMESCALE_PASSWORD: corvus_ci
           GRAFANA_PASSWORD: admin
           CORVUS_JWT_PUBLIC_KEY: ${{ env.CORVUS_JWT_PUBLIC_KEY }}
 
