@@ -63,6 +63,7 @@ add_library(corvus-resources STATIC
   resources/resource.cpp
   resources/resource_repository.cpp
   resources/resource_service.cpp
+  resources/resource_routes.cpp
 )
 
 target_include_directories(corvus-resources PUBLIC
@@ -72,7 +73,8 @@ target_include_directories(corvus-resources PUBLIC
 
 target_link_libraries(corvus-resources PUBLIC
   nlohmann_json::nlohmann_json
-  ${LIBPQXX_LIBRARIES}
+  corvus-db
+  Drogon::Drogon
 )
 
 target_compile_features(corvus-resources PUBLIC cxx_std_20)

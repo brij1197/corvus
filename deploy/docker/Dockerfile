@@ -15,11 +15,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     pkg-config ca-certificates libssl-dev gpg wget \
     bison flex autoconf python3 python3-pip libpq-dev libpqxx-dev \
     && wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc \
-       | gpg --dearmor - \
-       | tee /usr/share/keyrings/kitware-archive-keyring.gpg > /dev/null \
+    | gpg --dearmor - \
+    | tee /usr/share/keyrings/kitware-archive-keyring.gpg > /dev/null \
     && echo "deb [signed-by=/usr/share/keyrings/kitware-archive-keyring.gpg] \
-       https://apt.kitware.com/ubuntu/ jammy main" \
-       | tee /etc/apt/sources.list.d/kitware.list \
+    https://apt.kitware.com/ubuntu/ jammy main" \
+    | tee /etc/apt/sources.list.d/kitware.list \
     && apt-get update \
     && apt-get install -y --no-install-recommends cmake \
     && rm -rf /var/lib/apt/lists/* \
@@ -42,6 +42,7 @@ COPY CMakeLists.txt CMakePresets.json ./
 COPY src/     src/
 COPY include/ include/
 COPY tests/   tests/
+COPY db/      db/
 
 # ── Build ──────────────────────────────────────────────────────────────────
 # CMAKE_PRESET selects which CMakePresets.json entry to build:
@@ -62,11 +63,11 @@ RUN cmake --preset ${CMAKE_PRESET} \
 # runtime stage.
 RUN mkdir -p /build/libs \
     && if [ "${CMAKE_PRESET}" = "ci" ]; then \
-         ldd /build/build/src/corvus-core \
-           | awk '/=>/ { print $3 }' \
-           | grep -v "^$" \
-           | xargs -I{} cp --no-clobber {} /build/libs/ || true; \
-       fi
+    ldd /build/build/src/corvus-core \
+    | awk '/=>/ { print $3 }' \
+    | grep -v "^$" \
+    | xargs -I{} cp --no-clobber {} /build/libs/ || true; \
+    fi
 
 # ── Stage 2: distroless runtime ────────────────────────────────────────────
 FROM gcr.io/distroless/cc-debian12:nonroot AS runtime
@@ -77,16 +78,19 @@ ARG GIT_SHA
 
 # ── OCI image labels ───────────────────────────────────────────────────────
 LABEL org.opencontainers.image.title="corvus-core" \
-      org.opencontainers.image.description="Corvus management host - C++ core service" \
-      org.opencontainers.image.version="${CORVUS_VERSION}" \
-      org.opencontainers.image.created="${BUILD_DATE}" \
-      org.opencontainers.image.revision="${GIT_SHA}" \
-      org.opencontainers.image.source="https://github.com/brij1197/corvus" \
-      org.opencontainers.image.licenses="MIT"
+    org.opencontainers.image.description="Corvus management host - C++ core service" \
+    org.opencontainers.image.version="${CORVUS_VERSION}" \
+    org.opencontainers.image.created="${BUILD_DATE}" \
+    org.opencontainers.image.revision="${GIT_SHA}" \
+    org.opencontainers.image.source="https://github.com/brij1197/corvus" \
+    org.opencontainers.image.licenses="MIT"
 
 # ── Copy shared libs then binary ───────────────────────────────────────────
 COPY --from=builder /build/libs/              /usr/local/lib/
 COPY --from=builder /build/build/src/corvus-core /usr/local/bin/corvus-core
+COPY --from=builder /build/db/migrations/     /usr/local/share/corvus/migrations/
+
+ENV LD_LIBRARY_PATH=/usr/local/lib
 
 # /tmp is the only writable directory in distroless
 WORKDIR /tmp
