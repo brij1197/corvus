@@ -66,6 +66,7 @@ RUN mkdir -p /build/libs \
     ldd /build/build/src/corvus-core \
     | awk '/=>/ { print $3 }' \
     | grep -v "^$" \
+    | grep -vE '/(ld-linux[^/]*|libc|libm|libdl|librt|libpthread|libresolv|libstdc\+\+|libgcc_s)\.so' \
     | xargs -I{} cp --no-clobber {} /build/libs/ || true; \
     fi
 

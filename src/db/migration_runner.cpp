@@ -148,16 +148,19 @@ namespace corvus::db
 
     void MigrationRunner::apply(pqxx::connection &conn, const Migration &m)
     {
-        pqxx::nontransaction ntxn(conn);
-        try
         {
-            ntxn.exec(m.sql);
+            pqxx::nontransaction ntxn(conn);
+            try
+            {
+                ntxn.exec(m.sql);
+            }
+            catch (const std::exception &e)
+            {
+                throw MigrationError(
+                    "Migration " + m.name + " failed: " + e.what());
+            }
         }
-        catch (const std::exception &e)
-        {
-            throw MigrationError(
-                "Migration " + m.name + " failed: " + e.what());
-        }
+
         pqxx::work txn(conn);
         try
         {

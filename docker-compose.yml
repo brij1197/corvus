@@ -32,6 +32,10 @@ services:
     environment:
       - CORVUS_ENV=development
       - CORVUS_DB_HOST=postgres
+      - CORVUS_DB_PORT=5432
+      - CORVUS_DB_NAME=corvus
+      - CORVUS_DB_USER=corvus
+      - CORVUS_DB_PASSWORD=${POSTGRES_PASSWORD:-corvus_dev}
       - CORVUS_REDIS_HOST=redis
       - CORVUS_REDIS_PORT=6379
       - CORVUS_JWT_PUBLIC_KEY=${CORVUS_JWT_PUBLIC_KEY}
