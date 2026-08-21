@@ -3,6 +3,7 @@
 #include "corvus/resources/resource.h"
 #include "corvus/resources/resource_repository.h"
 #include <memory>
+#include <mutex>
 #include <stdexcept>
 #include <string>
 
@@ -40,5 +41,7 @@ namespace corvus::resources
 
         std::shared_ptr<ResourceRepository> repository_;
         std::shared_ptr<db::CacheAside> cache_;
+
+        mutable std::mutex cache_mutex_;
     };
 } // namespace corvus::resources

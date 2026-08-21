@@ -29,19 +29,23 @@ namespace corvus::resources
     Resource ResourceService::get(const std::string &client_id, const std::string &id)
     {
         const auto key = cache_key(client_id, id);
-        auto fetch = [this, &client_id, &id]() -> std::optional<std::string>
         {
-            const auto found = repository_->find_by_id(client_id, id);
-            if (!found)
-                return std::nullopt;
-            return to_json(*found).dump();
-        };
+            std::lock_guard<std::mutex> lock(cache_mutex_);
+            if (const auto cached = cache_->get(key))
+                return from_json(nlohmann::json::parse(*cached));
+        }
 
-        const auto cached = cache_->get_or_fetch(key, fetch, kResourceCacheTtlSeconds);
-
-        if (!cached)
+        const auto found = repository_->find_by_id(client_id, id);
+        if (!found)
             throw ResourceNotFound("Resource not found: " + id);
-        return from_json(nlohmann::json ::parse(*cached));
+
+        const auto serialized = to_json(*found).dump();
+        {
+            std::lock_guard<std::mutex> lock(cache_mutex_);
+            cache_->put(key, serialized, kResourceCacheTtlSeconds);
+        }
+
+        return *found;
     }
 
     ListResult ResourceService::list(const std::string &client_id, const ListFilter &filter)
@@ -64,7 +68,10 @@ namespace corvus::resources
         if (!updated)
             throw ResourceNotFound("Resource not found: " + id);
 
-        cache_->invalidate(cache_key(client_id, id));
+        {
+            std::lock_guard<std::mutex> lock(cache_mutex_);
+            cache_->invalidate(cache_key(client_id, id));
+        }
         return *updated;
     }
 
@@ -73,6 +80,10 @@ namespace corvus::resources
         const bool deleted = repository_->remove(client_id, id);
         if (!deleted)
             throw ResourceNotFound("Resource not found: " + id);
-        cache_->invalidate(cache_key(client_id, id));
+
+        {
+            std::lock_guard<std::mutex> lock(cache_mutex_);
+            cache_->invalidate(cache_key(client_id, id));
+        }
     }
 } // namespace corvus::resources
