@@ -11,7 +11,6 @@ namespace corvus::api
     switch (code)
     {
     case ErrorCode::bad_request:
-    case ErrorCode::unprocessable_entity:
       return drogon::k400BadRequest;
     case ErrorCode::unauthorized:
       return drogon::k401Unauthorized;
@@ -26,6 +25,7 @@ namespace corvus::api
       return drogon::k409Conflict;
     case ErrorCode::too_many_requests:
       return drogon::k429TooManyRequests;
+    case ErrorCode::unprocessable_entity:
     case ErrorCode::quota_exceeded:
       return drogon::k422UnprocessableEntity;
     case ErrorCode::payload_too_large:

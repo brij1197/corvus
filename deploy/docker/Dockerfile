@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential ninja-build git curl zip unzip tar \
     pkg-config ca-certificates libssl-dev gpg wget \
     bison flex autoconf python3 python3-pip libpq-dev libpqxx-dev \
+    ccache \
     && wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc \
     | gpg --dearmor - \
     | tee /usr/share/keyrings/kitware-archive-keyring.gpg > /dev/null \
@@ -35,7 +36,8 @@ WORKDIR /build
 
 # ── Dependency layer - cached as long as vcpkg.json does not change ───────
 COPY vcpkg.json .
-RUN $VCPKG_ROOT/vcpkg install --triplet x64-linux
+RUN --mount=type=cache,target=/root/.cache/vcpkg \
+    $VCPKG_ROOT/vcpkg install --triplet x64-linux
 
 # ── Source layer ───────────────────────────────────────────────────────────
 COPY CMakeLists.txt CMakePresets.json ./
@@ -53,7 +55,9 @@ COPY db/      db/
 # Only "ci" is stripped/copied into the runtime image - the others are
 # built and run from the builder stage directly via `docker run`.
 ARG CMAKE_PRESET=ci
-RUN cmake --preset ${CMAKE_PRESET} \
+RUN --mount=type=cache,target=/root/.ccache \
+    cmake --preset ${CMAKE_PRESET} \
+    -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
     && cmake --build --preset ${CMAKE_PRESET} \
     && if [ "${CMAKE_PRESET}" = "ci" ]; then strip build/src/corvus-core; fi
 
