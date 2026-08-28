@@ -38,6 +38,8 @@ on:
 
 jobs:
   cpp-build-test:
+    permissions:
+      contents: read
     name: C++ build and unit tests
     runs-on: ubuntu-22.04
     steps:
@@ -107,6 +109,8 @@ jobs:
         run: ctest --test-dir build --output-on-failure
 
   python-test:
+    permissions:
+      contents: read
     name: Python lint and unit tests
     runs-on: ubuntu-22.04
     steps:
@@ -131,6 +135,8 @@ jobs:
           else echo "No Python unit tests yet - skipping"; fi
 
   integration-test:
+    permissions:
+      contents: read
     name: Integration tests
     runs-on: ubuntu-22.04
     needs: [cpp-build-test, python-test]
@@ -193,6 +199,9 @@ jobs:
         run: docker compose down -v
 
   docker-build:
+    permissions:
+      contents: read
+      packages: write
     name: Docker image build and push
     runs-on: ubuntu-22.04
     needs: integration-test
