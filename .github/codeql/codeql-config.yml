@@ -1,0 +1,18 @@
+name: "Corvus CodeQL config"
+
+# vcpkg builds every dependency from source into the working tree, so a
+# CodeQL run that traces the C++ build ends up analysing OpenSSL, c-ares
+# and zlib alongside Corvus. That produced 69 of 74 alerts on the first
+# scan — findings like "DES uses a broken cryptographic algorithm" in
+# OpenSSL's own des/ implementation, which is both expected (OpenSSL
+# implements DES because the standard requires it) and not ours to fix.
+#
+# Excluding them keeps the alert list to code this repo actually owns.
+# Dependency vulnerabilities are Dependabot's job, not CodeQL's.
+paths-ignore:
+  - vcpkg/
+  - vcpkg_installed/
+  - build/
+  - build-asan/
+  - build-tsan/
+  - build-coverage/
