@@ -17,4 +17,4 @@ if ! make test; then
     exit 1
 fi
 
-echo "✓ Unit tests passed — proceeding with push."
+echo "✓ Unit tests passed - proceeding with push."

@@ -60,7 +60,7 @@ protected:
         {
             GTEST_SKIP() << "Redis not reachable at "
                          << redis_host() << ":" << redis_port()
-                         << " — skipping API key tests.";
+                         << " - skipping API key tests.";
         }
         validator_ = std::make_shared<corvus::auth::ApiKeyValidator>(
             redis_host(), redis_port());

@@ -144,7 +144,7 @@ pytest tests/integration -v
    ```
 3. Write code and tests
 4. Build and verify locally
-5. Push and open a PR — CI runs automatically
+5. Push and open a PR - CI runs automatically
 6. Squash and merge when CI is green
 7. Linear closes the issue automatically on merge
 
@@ -160,10 +160,10 @@ Ctrl+Shift+P → "WSL: Open Folder in WSL" → navigate to ~/corvus
 ```
 
 Recommended extensions inside WSL2:
-- `ms-vscode.cpptools` — C++ IntelliSense
-- `twxs.cmake` — CMake syntax highlighting
-- `ms-vscode.cmake-tools` — CMake integration
-- `charliermarsh.ruff` — Python linting
+- `ms-vscode.cpptools` - C++ IntelliSense
+- `twxs.cmake` - CMake syntax highlighting
+- `ms-vscode.cmake-tools` - CMake integration
+- `charliermarsh.ruff` - Python linting
 
 ---
 

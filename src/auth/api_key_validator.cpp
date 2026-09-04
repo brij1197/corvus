@@ -43,7 +43,7 @@ namespace corvus::auth
         host_ = (host && *host) ? host : "localhost";
         port_ = (port && *port) ? std::stoi(port) : 6379;
 
-        // Retry up to 5 times with 1s backoff — Docker DNS may not resolve
+        // Retry up to 5 times with 1s backoff - Docker DNS may not resolve
         // immediately even after the Redis healthcheck passes
         constexpr int kMaxAttempts = 5;
         std::string last_error;

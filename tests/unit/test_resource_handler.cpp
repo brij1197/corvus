@@ -170,3 +170,108 @@ TEST(CreateResourceHandlerTest, ResponseContentTypeIsJson)
     EXPECT_NE(std::string{resp->getHeader("content-type")}.find("application/json"),
               std::string::npos);
 }
+
+namespace
+{
+    drogon::HttpRequestPtr make_get_request(
+        const std::string &client_id = "11111111-1111-1111-1111-111111111111")
+    {
+        auto req = drogon::HttpRequest::newHttpRequest();
+        req->setMethod(drogon::Get);
+        req->setPath("/v1/resources/x");
+        if (!client_id.empty())
+            req->getAttributes()->insert(corvus::auth::kClientIdKey, client_id);
+        return req;
+    }
+
+    drogon::HttpResponsePtr invoke_get(const ResourceIdHandler &handler,
+                                       const drogon::HttpRequestPtr &req,
+                                       const std::string &id)
+    {
+        drogon::HttpResponsePtr captured;
+        handler(req, [&captured](const drogon::HttpResponsePtr &resp)
+                { captured = resp; }, id);
+        return captured;
+    }
+} // namespace
+
+TEST(GetResourceHandlerTest, MissingClientIdReturns500)
+{
+    auto handler = get_resource_handler(nullptr);
+    const auto resp = invoke_get(
+        handler, make_get_request(""), "11111111-1111-1111-1111-111111111111");
+
+    ASSERT_NE(resp, nullptr);
+    EXPECT_EQ(resp->getStatusCode(), drogon::k500InternalServerError);
+}
+
+TEST(GetResourceHandlerTest, MalformedUuidReturns404)
+{
+    auto handler = get_resource_handler(nullptr);
+    const auto resp = invoke_get(handler, make_get_request(), "not-a-uuid");
+
+    ASSERT_NE(resp, nullptr);
+    EXPECT_EQ(resp->getStatusCode(), drogon::k404NotFound);
+}
+
+TEST(GetResourceHandlerTest, EmptyIdReturns404)
+{
+    auto handler = get_resource_handler(nullptr);
+    EXPECT_EQ(invoke_get(handler, make_get_request(), "")->getStatusCode(),
+              drogon::k404NotFound);
+}
+
+TEST(GetResourceHandlerTest, WrongLengthUuidReturns404)
+{
+    auto handler = get_resource_handler(nullptr);
+    // One character short of a valid UUID.
+    EXPECT_EQ(invoke_get(handler, make_get_request(),
+                         "11111111-1111-1111-1111-11111111111")
+                  ->getStatusCode(),
+              drogon::k404NotFound);
+}
+
+TEST(GetResourceHandlerTest, NonHexCharactersReturn404)
+{
+    auto handler = get_resource_handler(nullptr);
+    EXPECT_EQ(invoke_get(handler, make_get_request(),
+                         "zzzzzzzz-1111-1111-1111-111111111111")
+                  ->getStatusCode(),
+              drogon::k404NotFound);
+}
+
+TEST(GetResourceHandlerTest, MisplacedHyphensReturn404)
+{
+    auto handler = get_resource_handler(nullptr);
+    EXPECT_EQ(invoke_get(handler, make_get_request(),
+                         "111111111-111-1111-1111-111111111111")
+                  ->getStatusCode(),
+              drogon::k404NotFound);
+}
+
+TEST(GetResourceHandlerTest, SqlInjectionAttemptReturns404)
+{
+    // Never reaches the database - rejected by the UUID shape check.
+    auto handler = get_resource_handler(nullptr);
+    EXPECT_EQ(invoke_get(handler, make_get_request(),
+                         "' OR 1=1 --")
+                  ->getStatusCode(),
+              drogon::k404NotFound);
+}
+
+TEST(GetResourceHandlerTest, NotFoundErrorCodeIsResourceNotFound)
+{
+    auto handler = get_resource_handler(nullptr);
+    const auto body = body_of(invoke_get(handler, make_get_request(), "bad"));
+    EXPECT_EQ(body["error"]["code"], "RESOURCE_NOT_FOUND");
+}
+
+TEST(GetResourceHandlerTest, NotFoundResponseHasEnvelopeShape)
+{
+    auto handler = get_resource_handler(nullptr);
+    const auto body = body_of(invoke_get(handler, make_get_request(), "bad"));
+
+    EXPECT_TRUE(body["data"].is_null());
+    EXPECT_TRUE(body.contains("error"));
+    EXPECT_TRUE(body["meta"].contains("request_id"));
+}

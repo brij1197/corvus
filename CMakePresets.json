@@ -24,7 +24,7 @@
     {
       "name": "ci",
       "displayName": "CI",
-      "description": "CI build — vcpkg path set by workflow",
+      "description": "CI build - vcpkg path set by workflow",
       "binaryDir": "${sourceDir}/build",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",

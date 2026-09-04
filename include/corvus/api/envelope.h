@@ -8,7 +8,7 @@ namespace corvus::api
 {
 
   /// Machine-readable error codes returned in the error envelope.
-  /// Add new codes here as the API grows — never use raw strings in handlers.
+  /// Add new codes here as the API grows - never use raw strings in handlers.
   enum class ErrorCode
   {
     internal_error,
