@@ -1,4 +1,4 @@
-# Corvus — PostgreSQL Schema Reference
+# Corvus - PostgreSQL Schema Reference
 
 ## Overview
 

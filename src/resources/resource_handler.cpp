@@ -3,6 +3,7 @@
 #include "corvus/api/response.h"
 #include "corvus/api/request_id.h"
 #include <nlohmann/json.hpp>
+#include <cctype>
 #include <sstream>
 
 namespace corvus::resources
@@ -19,6 +20,27 @@ namespace corvus::resources
             if (!Json::parseFromStream(builder, stream, &out, &errors))
                 throw std::runtime_error("Failed to convert resource JSON: " + errors);
             return out;
+        }
+
+        bool is_uuid(const std::string &value)
+        {
+            if (value.size() != 36)
+                return false;
+
+            for (std::size_t i = 0; i < value.size(); ++i)
+            {
+                const char c = value[i];
+                if (i == 8 || i == 13 || i == 18 || i == 23)
+                {
+                    if (c != '-')
+                        return false;
+                }
+                else if (!std::isxdigit(static_cast<unsigned char>(c)))
+                {
+                    return false;
+                }
+            }
+            return true;
         }
 
     } // namespace
@@ -87,10 +109,63 @@ namespace corvus::resources
                           << request_id << "): " << e.what();
                 callback(corvus::api::respond_error(
                     corvus::api::ErrorCode::internal_error,
-                    "An unexpected error occured.",
+                    "An unexpected error occurred.",
                     request_id));
             }
         };
     }
 
+    ResourceIdHandler get_resource_handler(std::shared_ptr<ResourceService> service)
+    {
+        return [service](const drogon::HttpRequestPtr &req,
+                         HandlerCallback &&callback,
+                         const std::string &id)
+        {
+            const auto request_id = corvus::api::get_request_id(req);
+            const auto client_id = corvus::auth::get_client_id(req);
+
+            if (client_id.empty())
+            {
+                LOG_ERROR << "client_id missing on authenticated route "
+                          << "(request_id=" << request_id << ")";
+                callback(corvus::api::respond_error(
+                    corvus::api::ErrorCode::internal_error,
+                    "An unexpected error occurred.",
+                    request_id));
+                return;
+            }
+
+            if (!is_uuid(id))
+            {
+                callback(corvus::api::respond_error(
+                    corvus::api::ErrorCode::resource_not_found,
+                    "Resource not found: " + id,
+                    request_id));
+                return;
+            }
+
+            try
+            {
+                const auto resource = service->get(client_id, id);
+                callback(corvus::api::respond_ok(
+                    to_json_value(to_json(resource)), request_id));
+            }
+            catch (const ResourceNotFound &e)
+            {
+                callback(corvus::api::respond_error(
+                    corvus::api::ErrorCode::resource_not_found,
+                    e.what(),
+                    request_id));
+            }
+            catch (const std::exception &e)
+            {
+                LOG_ERROR << "get resource failed (request_id=" << request_id
+                          << "): " << e.what();
+                callback(corvus::api::respond_error(
+                    corvus::api::ErrorCode::internal_error,
+                    "An unexpected error occurred.",
+                    request_id));
+            }
+        };
+    }
 } // namespace corvus::resources

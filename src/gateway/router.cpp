@@ -10,8 +10,6 @@ namespace corvus::gateway
 
     void register_routes()
     {
-        auto handler = health_handler();
-
         auto h = health_handler();
         drogon::app().registerHandler(
             "/health",
@@ -27,6 +25,11 @@ namespace corvus::gateway
             { h(req, std::move(cb)); },
             {drogon::Get});
 
+        LOG_INFO << "Routes registered";
+    }
+
+    void register_catchall_routes()
+    {
         auto nf = not_found_handler();
         const std::vector<drogon::internal::HttpConstraint> all_methods = {
             drogon::Get, drogon::Post, drogon::Put,
@@ -59,7 +62,8 @@ namespace corvus::gateway
                 std::function<void(const drogon::HttpResponsePtr &)> &&cb)
             { nf(req, std::move(cb)); },
             all_methods);
-        LOG_INFO << "Routes registered";
+
+        LOG_INFO << "Catch-all routes registered";
     }
 
 } // namespace corvus::gateway

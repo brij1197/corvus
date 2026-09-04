@@ -157,6 +157,7 @@ int main(int argc, char *argv[])
     // Register routes
     corvus::gateway::register_routes();
     corvus::resources::register_resource_routes(resource_service);
+    corvus::gateway::register_catchall_routes();
 
     // Configure and run Drogon
     drogon::app()

@@ -15,6 +15,16 @@ namespace corvus::resources
                      std::function<void(const drogon::HttpResponsePtr &)> &&cb)
             { create(req, std::move(cb)); },
             {drogon::Post});
-        LOG_INFO << "Resource routes registered (1 endpoint)";
+
+        auto get_one = get_resource_handler(service);
+        drogon::app().registerHandler(
+            "/v1/resources/{id}",
+            [get_one](const drogon::HttpRequestPtr &req,
+                      std::function<void(const drogon::HttpResponsePtr &)> &&cb,
+                      const std::string &id)
+            { get_one(req, std::move(cb), id); },
+            {drogon::Get});
+
+        LOG_INFO << "Resource routes registered (2 endpoints)";
     }
 } // namespace corvus::resources

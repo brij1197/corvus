@@ -6,10 +6,16 @@
 
 namespace corvus::resources
 {
-    using HandlerCallback = std::function<void(const drogon::HttpResponsePtr &)>; 
+    using HandlerCallback = std::function<void(const drogon::HttpResponsePtr &)>;
     using ResourceHandler =
         std::function<void(const drogon::HttpRequestPtr &, HandlerCallback &&)>;
 
+    using ResourceIdHandler =
+        std::function<void(const drogon::HttpRequestPtr &, HandlerCallback &&,
+                           const std::string &)>;
+
     ResourceHandler create_resource_handler(std::shared_ptr<ResourceService> service);
+
+    ResourceIdHandler get_resource_handler(std::shared_ptr<ResourceService> service);
 
 } // namespace corvus::resources

@@ -26,7 +26,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && pip3 install --no-cache-dir gcovr
 
-# ── vcpkg — pinned to a release tag for reproducibility ───────────────────
+# ── vcpkg - pinned to a release tag for reproducibility ───────────────────
 ARG VCPKG_TAG=master
 RUN git clone --depth 1 --branch ${VCPKG_TAG} \
     https://github.com/microsoft/vcpkg.git $VCPKG_ROOT \
