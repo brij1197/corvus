@@ -275,3 +275,81 @@ TEST(GetResourceHandlerTest, NotFoundResponseHasEnvelopeShape)
     EXPECT_TRUE(body.contains("error"));
     EXPECT_TRUE(body["meta"].contains("request_id"));
 }
+
+TEST(ParseLimitParamTest, AcceptsPlainInteger)
+{
+    const auto result = parse_limit_param("50");
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(*result, 50);
+}
+
+TEST(ParseLimitParamTest, AcceptsOne)
+{
+    const auto result = parse_limit_param("1");
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(*result, 1);
+}
+
+TEST(ParseLimitParamTest, AcceptsValueAboveClampCeiling)
+{
+    // Clamping to 1..200 is the repository's job — the parser only decides
+    // whether the value is an integer at all.
+    const auto result = parse_limit_param("9999");
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(*result, 9999);
+}
+
+TEST(ParseLimitParamTest, AcceptsNegative)
+{
+    // Also clamped downstream rather than rejected here.
+    const auto result = parse_limit_param("-5");
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(*result, -5);
+}
+
+TEST(ParseLimitParamTest, RejectsNonNumeric)
+{
+    EXPECT_FALSE(parse_limit_param("abc").has_value());
+}
+
+TEST(ParseLimitParamTest, RejectsTrailingGarbage)
+{
+    // std::stoi("50x") alone would return 50 and silently ignore the "x".
+    EXPECT_FALSE(parse_limit_param("50x").has_value());
+}
+
+TEST(ParseLimitParamTest, RejectsLeadingGarbage)
+{
+    EXPECT_FALSE(parse_limit_param("x50").has_value());
+}
+
+TEST(ParseLimitParamTest, RejectsEmptyString)
+{
+    EXPECT_FALSE(parse_limit_param("").has_value());
+}
+
+TEST(ParseLimitParamTest, RejectsFloat)
+{
+    EXPECT_FALSE(parse_limit_param("1.5").has_value());
+}
+
+TEST(ParseLimitParamTest, RejectsOutOfRangeValue)
+{
+    // std::stoi throws out_of_range rather than returning a truncated value.
+    EXPECT_FALSE(parse_limit_param("99999999999999999999").has_value());
+}
+
+TEST(ListResourcesHandlerTest, MissingClientIdReturns500)
+{
+    // The client_id guard fires before the service is dereferenced, so a
+    // null service is safe here.
+    auto handler = list_resources_handler(nullptr);
+
+    auto req = drogon::HttpRequest::newHttpRequest();
+    req->setMethod(drogon::Get);
+    req->setPath("/v1/resources");
+
+    const auto resp = invoke(handler, req);
+    ASSERT_NE(resp, nullptr);
+    EXPECT_EQ(resp->getStatusCode(), drogon::k500InternalServerError);
+}

@@ -16,6 +16,14 @@ namespace corvus::resources
             { create(req, std::move(cb)); },
             {drogon::Post});
 
+        auto list = list_resources_handler(service);
+        drogon::app().registerHandler(
+            "/v1/resources",
+            [list](const drogon::HttpRequestPtr &req,
+                   std::function<void(const drogon::HttpResponsePtr &)> &&cb)
+            { list(req, std::move(cb)); },
+            {drogon::Get});
+
         auto get_one = get_resource_handler(service);
         drogon::app().registerHandler(
             "/v1/resources/{id}",
@@ -25,6 +33,6 @@ namespace corvus::resources
             { get_one(req, std::move(cb), id); },
             {drogon::Get});
 
-        LOG_INFO << "Resource routes registered (2 endpoints)";
+        LOG_INFO << "Resource routes registered (3 endpoints)";
     }
 } // namespace corvus::resources

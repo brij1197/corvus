@@ -18,4 +18,8 @@ namespace corvus::resources
 
     ResourceIdHandler get_resource_handler(std::shared_ptr<ResourceService> service);
 
+    std::optional<int> parse_limit_param(const std::string &raw);
+
+    ResourceHandler list_resources_handler(std::shared_ptr<ResourceService> service);
+
 } // namespace corvus::resources
