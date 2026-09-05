@@ -168,4 +168,97 @@ namespace corvus::resources
             }
         };
     }
+    std::optional<int> parse_limit_param(const std::string &raw)
+    {
+        try
+        {
+            std::size_t consumed = 0;
+            const int parsed = std::stoi(raw, &consumed);
+            if (consumed != raw.size())
+                return std::nullopt;
+            return parsed;
+        }
+        catch (const std::exception &)
+        {
+            return std::nullopt;
+        }
+    }
+
+    ResourceHandler list_resources_handler(std::shared_ptr<ResourceService> service)
+    {
+        return [service](const drogon::HttpRequestPtr &req,
+                         HandlerCallback &&callback)
+        {
+            const auto request_id = corvus::api::get_request_id(req);
+            const auto client_id = corvus::auth::get_client_id(req);
+
+            if (client_id.empty())
+            {
+                LOG_ERROR << "client_id missing on authenticated route "
+                          << "(request_id=" << request_id << ")";
+                callback(corvus::api::respond_error(
+                    corvus::api::ErrorCode::internal_error,
+                    "An unexpected error occurred.",
+                    request_id));
+                return;
+            }
+
+            ListFilter filter;
+
+            const auto kind = req->getParameter("kind");
+            if (!kind.empty())
+                filter.kind = kind;
+
+            const auto status = req->getParameter("status");
+            if (!status.empty())
+                filter.status = status;
+
+            const auto cursor = req->getParameter("cursor");
+            if (!cursor.empty())
+                filter.cursor = cursor;
+
+            const auto limit = req->getParameter("limit");
+            if (!limit.empty())
+            {
+                const auto parsed = parse_limit_param(limit);
+                if (!parsed)
+                {
+                    callback(corvus::api::respond_error(
+                        corvus::api::ErrorCode::bad_request,
+                        "Query parameter 'limit' must be an integer.",
+                        request_id));
+                    return;
+                }
+                filter.limit = *parsed;
+            }
+
+            try
+            {
+                const auto result = service->list(client_id, filter);
+
+                Json::Value items(Json::arrayValue);
+                for (const auto &resource : result.items)
+                    items.append(to_json_value(to_json(resource)));
+
+                callback(corvus::api::respond_list(
+                    items, request_id, result.next_cursor, result.has_more));
+            }
+            catch (const InvalidCursorError &)
+            {
+                callback(corvus::api::respond_error(
+                    corvus::api::ErrorCode::bad_request,
+                    "Query parameter 'cursor' is not valid.",
+                    request_id));
+            }
+            catch (const std::exception &e)
+            {
+                LOG_ERROR << "list resources failed (request_id=" << request_id
+                          << "): " << e.what();
+                callback(corvus::api::respond_error(
+                    corvus::api::ErrorCode::internal_error,
+                    "An unexpected error occurred.",
+                    request_id));
+            }
+        };
+    }
 } // namespace corvus::resources
