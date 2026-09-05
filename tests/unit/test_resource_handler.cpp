@@ -292,7 +292,7 @@ TEST(ParseLimitParamTest, AcceptsOne)
 
 TEST(ParseLimitParamTest, AcceptsValueAboveClampCeiling)
 {
-    // Clamping to 1..200 is the repository's job — the parser only decides
+    // Clamping to 1..200 is the repository's job - the parser only decides
     // whether the value is an integer at all.
     const auto result = parse_limit_param("9999");
     ASSERT_TRUE(result.has_value());
@@ -352,4 +352,153 @@ TEST(ListResourcesHandlerTest, MissingClientIdReturns500)
     const auto resp = invoke(handler, req);
     ASSERT_NE(resp, nullptr);
     EXPECT_EQ(resp->getStatusCode(), drogon::k500InternalServerError);
+}
+
+namespace
+{
+    drogon::HttpRequestPtr make_patch_request(
+        const std::string &body,
+        const std::string &client_id = "11111111-1111-1111-1111-111111111111")
+    {
+        auto req = drogon::HttpRequest::newHttpRequest();
+        req->setMethod(drogon::Patch);
+        req->setPath("/v1/resources/x");
+        req->setBody(body);
+        if (!client_id.empty())
+            req->getAttributes()->insert(corvus::auth::kClientIdKey, client_id);
+        return req;
+    }
+
+    const std::string kValidId = "11111111-1111-1111-1111-111111111111";
+} // namespace
+
+TEST(UpdateResourceHandlerTest, MissingClientIdReturns500)
+{
+    auto handler = update_resource_handler(nullptr);
+    const auto resp = invoke_get(
+        handler, make_patch_request(R"({"status":"active"})", ""), kValidId);
+
+    ASSERT_NE(resp, nullptr);
+    EXPECT_EQ(resp->getStatusCode(), drogon::k500InternalServerError);
+}
+
+TEST(UpdateResourceHandlerTest, MalformedUuidReturns404)
+{
+    auto handler = update_resource_handler(nullptr);
+    const auto resp = invoke_get(
+        handler, make_patch_request(R"({"status":"active"})"), "not-a-uuid");
+
+    EXPECT_EQ(resp->getStatusCode(), drogon::k404NotFound);
+}
+
+TEST(UpdateResourceHandlerTest, UuidIsCheckedBeforeBody)
+{
+    // A malformed id with an also-malformed body must still return 404, not
+    // 400 - the id check runs first so a bad id never reveals whether the
+    // body would have been accepted.
+    auto handler = update_resource_handler(nullptr);
+    const auto resp = invoke_get(
+        handler, make_patch_request("{not json"), "not-a-uuid");
+
+    EXPECT_EQ(resp->getStatusCode(), drogon::k404NotFound);
+}
+
+TEST(UpdateResourceHandlerTest, MalformedJsonReturns400)
+{
+    auto handler = update_resource_handler(nullptr);
+    const auto resp = invoke_get(
+        handler, make_patch_request("{not json"), kValidId);
+
+    EXPECT_EQ(resp->getStatusCode(), drogon::k400BadRequest);
+}
+
+TEST(UpdateResourceHandlerTest, EmptyBodyReturns400)
+{
+    auto handler = update_resource_handler(nullptr);
+    EXPECT_EQ(invoke_get(handler, make_patch_request(""), kValidId)
+                  ->getStatusCode(),
+              drogon::k400BadRequest);
+}
+
+TEST(UpdateResourceHandlerTest, EmptyPatchReturns422)
+{
+    auto handler = update_resource_handler(nullptr);
+    EXPECT_EQ(invoke_get(handler, make_patch_request("{}"), kValidId)
+                  ->getStatusCode(),
+              drogon::k422UnprocessableEntity);
+}
+
+TEST(UpdateResourceHandlerTest, UnknownFieldsOnlyReturns422)
+{
+    // Unknown fields are ignored, so a body containing only unknown fields
+    // is an empty patch.
+    auto handler = update_resource_handler(nullptr);
+    EXPECT_EQ(invoke_get(handler, make_patch_request(R"({"colour":"red"})"), kValidId)
+                  ->getStatusCode(),
+              drogon::k422UnprocessableEntity);
+}
+
+TEST(UpdateResourceHandlerTest, AllNullFieldsReturns422)
+{
+    auto handler = update_resource_handler(nullptr);
+    const auto body = R"({"name":null,"status":null,"metadata":null})";
+    EXPECT_EQ(invoke_get(handler, make_patch_request(body), kValidId)
+                  ->getStatusCode(),
+              drogon::k422UnprocessableEntity);
+}
+
+TEST(UpdateResourceHandlerTest, EmptyNameReturns422)
+{
+    auto handler = update_resource_handler(nullptr);
+    EXPECT_EQ(invoke_get(handler, make_patch_request(R"({"name":""})"), kValidId)
+                  ->getStatusCode(),
+              drogon::k422UnprocessableEntity);
+}
+
+TEST(UpdateResourceHandlerTest, OversizedNameReturns422)
+{
+    auto handler = update_resource_handler(nullptr);
+    const std::string huge(kNameMaxLen + 1, 'a');
+    const json body{{"name", huge}};
+
+    EXPECT_EQ(invoke_get(handler, make_patch_request(body.dump()), kValidId)
+                  ->getStatusCode(),
+              drogon::k422UnprocessableEntity);
+}
+
+TEST(UpdateResourceHandlerTest, NonObjectMetadataReturns422)
+{
+    auto handler = update_resource_handler(nullptr);
+    EXPECT_EQ(invoke_get(handler, make_patch_request(R"({"metadata":"nope"})"), kValidId)
+                  ->getStatusCode(),
+              drogon::k422UnprocessableEntity);
+}
+
+TEST(UpdateResourceHandlerTest, ValidationErrorCodeIsUnprocessableEntity)
+{
+    auto handler = update_resource_handler(nullptr);
+    const auto body = body_of(invoke_get(handler, make_patch_request("{}"), kValidId));
+    EXPECT_EQ(body["error"]["code"], "UNPROCESSABLE_ENTITY");
+}
+
+TEST(UpdateResourceHandlerTest, EmptyPatchMessageIsActionable)
+{
+    auto handler = update_resource_handler(nullptr);
+    const auto body = body_of(invoke_get(handler, make_patch_request("{}"), kValidId));
+
+    // Should tell the caller which fields are patchable.
+    const std::string message = body["error"]["message"];
+    EXPECT_NE(message.find("name"), std::string::npos);
+    EXPECT_NE(message.find("status"), std::string::npos);
+    EXPECT_NE(message.find("metadata"), std::string::npos);
+}
+
+TEST(UpdateResourceHandlerTest, ErrorResponseHasEnvelopeShape)
+{
+    auto handler = update_resource_handler(nullptr);
+    const auto body = body_of(invoke_get(handler, make_patch_request("{}"), kValidId));
+
+    EXPECT_TRUE(body["data"].is_null());
+    EXPECT_TRUE(body.contains("error"));
+    EXPECT_TRUE(body["meta"].contains("request_id"));
 }

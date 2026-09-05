@@ -281,6 +281,9 @@ namespace corvus::resources
                 return;
             }
 
+            // Checked before parsing the body: a non-UUID cannot identify a
+            // row, and returning 404 keeps it indistinguishable from a real
+            // miss or a cross-tenant id.
             if (!is_uuid(id))
             {
                 callback(corvus::api::respond_error(
@@ -346,4 +349,5 @@ namespace corvus::resources
             }
         };
     }
+
 } // namespace corvus::resources
