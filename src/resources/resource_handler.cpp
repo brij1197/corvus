@@ -261,4 +261,89 @@ namespace corvus::resources
             }
         };
     }
+    ResourceIdHandler update_resource_handler(std::shared_ptr<ResourceService> service)
+    {
+        return [service](const drogon::HttpRequestPtr &req,
+                         HandlerCallback &&callback,
+                         const std::string &id)
+        {
+            const auto request_id = corvus::api::get_request_id(req);
+            const auto client_id = corvus::auth::get_client_id(req);
+
+            if (client_id.empty())
+            {
+                LOG_ERROR << "client_id missing on authenticated route "
+                          << "(request_id=" << request_id << ")";
+                callback(corvus::api::respond_error(
+                    corvus::api::ErrorCode::internal_error,
+                    "An unexpected error occurred.",
+                    request_id));
+                return;
+            }
+
+            if (!is_uuid(id))
+            {
+                callback(corvus::api::respond_error(
+                    corvus::api::ErrorCode::resource_not_found,
+                    "Resource not found: " + id,
+                    request_id));
+                return;
+            }
+
+            nlohmann::json body;
+            try
+            {
+                body = nlohmann::json::parse(req->getBody());
+            }
+            catch (const nlohmann::json::exception &e)
+            {
+                LOG_DEBUG << "Malformed JSON body (request_id=" << request_id
+                          << "): " << e.what();
+                callback(corvus::api::respond_error(
+                    corvus::api::ErrorCode::bad_request,
+                    "Request body is not valid JSON.",
+                    request_id));
+                return;
+            }
+
+            try
+            {
+                const auto update_request = parse_update_request(body);
+                const auto updated = service->update(client_id, id, update_request);
+
+                callback(corvus::api::respond_ok(
+                    to_json_value(to_json(updated)), request_id));
+            }
+            catch (const ResourceValidationError &e)
+            {
+                callback(corvus::api::respond_error(
+                    corvus::api::ErrorCode::unprocessable_entity,
+                    e.what(),
+                    request_id));
+            }
+            catch (const ResourceNotFound &e)
+            {
+                callback(corvus::api::respond_error(
+                    corvus::api::ErrorCode::resource_not_found,
+                    e.what(),
+                    request_id));
+            }
+            catch (const ResourceAlreadyExists &e)
+            {
+                callback(corvus::api::respond_error(
+                    corvus::api::ErrorCode::resource_already_exists,
+                    e.what(),
+                    request_id));
+            }
+            catch (const std::exception &e)
+            {
+                LOG_ERROR << "update resource failed (request_id=" << request_id
+                          << "): " << e.what();
+                callback(corvus::api::respond_error(
+                    corvus::api::ErrorCode::internal_error,
+                    "An unexpected error occurred.",
+                    request_id));
+            }
+        };
+    }
 } // namespace corvus::resources
