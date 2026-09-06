@@ -128,23 +128,62 @@ namespace corvus::gateway
         }
     }
 
+    const std::vector<std::string> &trusted_proxies()
+    {
+        static const std::vector<std::string> proxies = []
+        {
+            std::vector<std::string> out;
+            const char *raw = std::getenv("CORVUS_TRUSTED_PROXIES");
+            if (!raw || !*raw)
+                return out;
+
+            std::string value{raw};
+            std::size_t start = 0;
+            while (start <= value.size())
+            {
+                const auto comma = value.find(',', start);
+                const auto end = (comma == std::string::npos) ? value.size() : comma;
+                auto entry = value.substr(start, end - start);
+
+                const auto first = entry.find_first_not_of(" \t");
+                const auto last = entry.find_last_not_of(" \t");
+                if (first != std::string::npos)
+                    out.push_back(entry.substr(first, last - first + 1));
+
+                if (comma == std::string::npos)
+                    break;
+                start = comma + 1;
+            }
+            return out;
+        }();
+        return proxies;
+    }
+
     std::string client_key_from_request(const drogon::HttpRequestPtr &req)
     {
+        const auto peer = req->getPeerAddr().toIp();
+        
+        const auto &proxies = trusted_proxies();
+        const bool peer_is_trusted =
+            std::find(proxies.begin(), proxies.end(), peer) != proxies.end();
+
+        if (!peer_is_trusted)
+            return peer;
+
         const auto xff = req->getHeader("X-Forwarded-For");
-        if (!xff.empty())
-        {
-            const auto comma = xff.find(',');
-            auto ip = (comma != std::string::npos) ? xff.substr(0, comma) : std::string(xff);
+        if (xff.empty())
+            return peer;
 
-            const auto start = ip.find_first_not_of(" \t");
-            const auto end = ip.find_last_not_of(" \t");
-            if (start != std::string::npos)
-            {
-                return ip.substr(start, end - start + 1);
-            }
-        }
+        const auto comma = xff.find(',');
+        auto ip = (comma != std::string::npos) ? xff.substr(0, comma)
+                                               : std::string(xff);
 
-        return req->getPeerAddr().toIp();
+        const auto start = ip.find_first_not_of(" \t");
+        const auto end = ip.find_last_not_of(" \t");
+        if (start == std::string::npos)
+            return peer;
+
+        return ip.substr(start, end - start + 1);
     }
 
     void register_rate_limit_middleware(std::shared_ptr<RateLimiter> limiter)

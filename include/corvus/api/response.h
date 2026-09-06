@@ -30,6 +30,8 @@ namespace corvus::api
       return drogon::k422UnprocessableEntity;
     case ErrorCode::payload_too_large:
       return drogon::k413RequestEntityTooLarge;
+    case ErrorCode::service_unavailable:
+      return drogon::k503ServiceUnavailable;
     case ErrorCode::internal_error:
     default:
       return drogon::k500InternalServerError;

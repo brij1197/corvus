@@ -66,7 +66,12 @@ class TestReady:
     def test_ready_envelope_shape(self, client):
         body = client.get("/ready").json()
         assert body["error"] is None
-        assert body["data"]["status"] == "ok"
+        assert body["data"]["status"] == "ready"
+
+    def test_ready_reports_dependency_checks(self, client):
+        checks = client.get("/ready").json()["data"]["checks"]
+        assert checks["postgres"] == "ok"
+        assert checks["redis"] == "ok"
 
     def test_ready_x_request_id_header_present(self, client):
         resp = client.get("/ready")

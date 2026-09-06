@@ -55,6 +55,7 @@ gtest_add_tests(
               test_envelope.cpp
               test_jwt_validator.cpp
               test_api_key_validator.cpp
+              test_rate_limiter.cpp
               test_request_size_limit.cpp
               test_request_id.cpp
               test_pg_pool.cpp
@@ -67,4 +68,3 @@ gtest_add_tests(
               test_client_context.cpp
               test_resource_handler.cpp
 )
-

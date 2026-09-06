@@ -1,14 +1,13 @@
 #pragma once
 #include "corvus/db/pg_pool.h"
 #include "corvus/db/redis_connection.h"
+#include "corvus/gateway/health_handler.h"
 #include <memory>
 
 namespace corvus::gateway
 {
 
-    void register_routes();
-    void register_readiness_route(std::shared_ptr<db::PgPool> pool,
+    HandlerFunc readiness_handler(std::shared_ptr<db::PgPool> pool,
                                   db::RedisConfig redis_config);
-    void register_catchall_routes();
 
 } // namespace corvus::gateway

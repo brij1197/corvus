@@ -156,7 +156,10 @@ int main(int argc, char *argv[])
 
     // Register routes
     corvus::gateway::register_routes();
+    corvus::gateway::register_readiness_route(
+        pg_pool, corvus::db::redis_config_from_env());
     corvus::resources::register_resource_routes(resource_service);
+
     corvus::gateway::register_catchall_routes();
 
     // Configure and run Drogon
