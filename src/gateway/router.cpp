@@ -1,5 +1,6 @@
 #include "corvus/gateway/router.h"
 #include "corvus/gateway/health_handler.h"
+#include "corvus/gateway/readiness_handler.h"
 #include "corvus/gateway/not_found_handler.h"
 #include "corvus/api/response.h"
 #include "corvus/api/request_id.h"
@@ -18,14 +19,21 @@ namespace corvus::gateway
             { h(req, std::move(cb)); },
             {drogon::Get});
 
+        LOG_INFO << "Routes registered";
+    }
+
+    void register_readiness_route(std::shared_ptr<db::PgPool> pool,
+                                  db::RedisConfig redis_config)
+    {
+        auto r = readiness_handler(std::move(pool), std::move(redis_config));
         drogon::app().registerHandler(
             "/ready",
-            [h](const drogon::HttpRequestPtr &req,
+            [r](const drogon::HttpRequestPtr &req,
                 std::function<void(const drogon::HttpResponsePtr &)> &&cb)
-            { h(req, std::move(cb)); },
+            { r(req, std::move(cb)); },
             {drogon::Get});
 
-        LOG_INFO << "Routes registered";
+        LOG_INFO << "Readiness route registered";
     }
 
     void register_catchall_routes()

@@ -14,26 +14,6 @@ target_link_libraries(corvus-api PUBLIC
 
 target_compile_features(corvus-api PUBLIC cxx_std_20)
 
-add_library(corvus-gateway STATIC
-  gateway/router.cpp
-  gateway/health_handler.cpp
-  gateway/not_found_handler.cpp
-  gateway/rate_limiter.cpp
-  gateway/request_size_limit.cpp
-  gateway/request_id_middleware.cpp
-)
-
-target_include_directories(corvus-gateway PUBLIC
-  ${CMAKE_SOURCE_DIR}/include
-)
-
-target_link_libraries(corvus-gateway PUBLIC
-  corvus-api
-  Drogon::Drogon
-)
-
-target_compile_features(corvus-gateway PUBLIC cxx_std_20)
-
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBPQXX REQUIRED libpqxx)
 find_package(hiredis CONFIG REQUIRED)
@@ -57,29 +37,28 @@ target_link_libraries(corvus-db PUBLIC
 
 target_compile_features(corvus-db PUBLIC cxx_std_20)
 
-find_package(nlohmann_json CONFIG REQUIRED)
-
-add_library(corvus-resources STATIC
-  resources/resource.cpp
-  resources/resource_repository.cpp
-  resources/resource_service.cpp
-  resources/resource_routes.cpp
-  resources/resource_handler.cpp
+add_library(corvus-gateway STATIC
+  gateway/router.cpp
+  gateway/health_handler.cpp
+  gateway/readiness_handler.cpp
+  gateway/not_found_handler.cpp
+  gateway/rate_limiter.cpp
+  gateway/request_size_limit.cpp
+  gateway/request_id_middleware.cpp
 )
 
-target_include_directories(corvus-resources PUBLIC
+target_include_directories(corvus-gateway PUBLIC
   ${CMAKE_SOURCE_DIR}/include
-  ${LIBPQXX_INCLUDE_DIRS}
 )
 
-target_link_libraries(corvus-resources PUBLIC
-  nlohmann_json::nlohmann_json
+target_link_libraries(corvus-gateway PUBLIC
+  corvus-api
   corvus-db
-  corvus-auth
   Drogon::Drogon
 )
 
-target_compile_features(corvus-resources PUBLIC cxx_std_20)
+target_compile_features(corvus-gateway PUBLIC cxx_std_20)
+
 
 find_package(jwt-cpp CONFIG REQUIRED)
 find_package(OpenSSL REQUIRED)
@@ -105,6 +84,31 @@ target_link_libraries(corvus-auth PUBLIC
 )
 
 target_compile_features(corvus-auth PUBLIC cxx_std_20)
+
+find_package(nlohmann_json CONFIG REQUIRED)
+
+add_library(corvus-resources STATIC
+  resources/resource.cpp
+  resources/resource_repository.cpp
+  resources/resource_service.cpp
+  resources/resource_routes.cpp
+  resources/resource_handler.cpp
+)
+
+target_include_directories(corvus-resources PUBLIC
+  ${CMAKE_SOURCE_DIR}/include
+  ${LIBPQXX_INCLUDE_DIRS}
+)
+
+target_link_libraries(corvus-resources PUBLIC
+  nlohmann_json::nlohmann_json
+  corvus-db
+  corvus-auth
+  Drogon::Drogon
+)
+
+target_compile_features(corvus-resources PUBLIC cxx_std_20)
+
 
 add_executable(corvus-core
   main.cpp

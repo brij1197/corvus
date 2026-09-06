@@ -25,6 +25,7 @@ namespace corvus::api
     quota_exceeded,
     policy_denied,
     payload_too_large,
+    service_unavailable,
   };
 
   /// Convert an ErrorCode to its canonical string representation.
@@ -60,6 +61,8 @@ namespace corvus::api
       return "POLICY_DENIED";
     case ErrorCode::payload_too_large:
       return "PAYLOAD_TOO_LARGE";
+    case ErrorCode::service_unavailable:
+      return "SERVICE_UNAVAILABLE";
     default:
       return "UNKNOWN_ERROR";
     }
