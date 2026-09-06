@@ -42,6 +42,15 @@ namespace corvus::resources
             { update(req, std::move(cb), id); },
             {drogon::Patch});
 
-        LOG_INFO << "Resource routes registered (4 endpoints)";
+        auto remove = delete_resource_handler(service);
+        drogon::app().registerHandler(
+            "/v1/resources/{id}",
+            [remove](const drogon::HttpRequestPtr &req,
+                     std::function<void(const drogon::HttpResponsePtr &)> &&cb,
+                     const std::string &id)
+            { remove(req, std::move(cb), id); },
+            {drogon::Delete});
+
+        LOG_INFO << "Resource routes registered (5 endpoints)";
     }
 } // namespace corvus::resources

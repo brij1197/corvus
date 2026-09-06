@@ -393,9 +393,6 @@ TEST(UpdateResourceHandlerTest, MalformedUuidReturns404)
 
 TEST(UpdateResourceHandlerTest, UuidIsCheckedBeforeBody)
 {
-    // A malformed id with an also-malformed body must still return 404, not
-    // 400 - the id check runs first so a bad id never reveals whether the
-    // body would have been accepted.
     auto handler = update_resource_handler(nullptr);
     const auto resp = invoke_get(
         handler, make_patch_request("{not json"), "not-a-uuid");
@@ -497,6 +494,71 @@ TEST(UpdateResourceHandlerTest, ErrorResponseHasEnvelopeShape)
 {
     auto handler = update_resource_handler(nullptr);
     const auto body = body_of(invoke_get(handler, make_patch_request("{}"), kValidId));
+
+    EXPECT_TRUE(body["data"].is_null());
+    EXPECT_TRUE(body.contains("error"));
+    EXPECT_TRUE(body["meta"].contains("request_id"));
+}
+
+namespace
+{
+    drogon::HttpRequestPtr make_delete_request(
+        const std::string &client_id = "11111111-1111-1111-1111-111111111111")
+    {
+        auto req = drogon::HttpRequest::newHttpRequest();
+        req->setMethod(drogon::Delete);
+        req->setPath("/v1/resources/x");
+        if (!client_id.empty())
+            req->getAttributes()->insert(corvus::auth::kClientIdKey, client_id);
+        return req;
+    }
+} // namespace
+
+TEST(DeleteResourceHandlerTest, MissingClientIdReturns500)
+{
+    auto handler = delete_resource_handler(nullptr);
+    const auto resp = invoke_get(handler, make_delete_request(""), kValidId);
+
+    ASSERT_NE(resp, nullptr);
+    EXPECT_EQ(resp->getStatusCode(), drogon::k500InternalServerError);
+}
+
+TEST(DeleteResourceHandlerTest, MalformedUuidReturns404)
+{
+    auto handler = delete_resource_handler(nullptr);
+    EXPECT_EQ(invoke_get(handler, make_delete_request(), "not-a-uuid")
+                  ->getStatusCode(),
+              drogon::k404NotFound);
+}
+
+TEST(DeleteResourceHandlerTest, EmptyIdReturns404)
+{
+    auto handler = delete_resource_handler(nullptr);
+    EXPECT_EQ(invoke_get(handler, make_delete_request(), "")->getStatusCode(),
+              drogon::k404NotFound);
+}
+
+TEST(DeleteResourceHandlerTest, SqlInjectionAttemptReturns404)
+{
+    auto handler = delete_resource_handler(nullptr);
+    EXPECT_EQ(invoke_get(handler, make_delete_request(), "' OR 1=1 --")
+                  ->getStatusCode(),
+              drogon::k404NotFound);
+}
+
+TEST(DeleteResourceHandlerTest, NotFoundErrorCodeIsResourceNotFound)
+{
+    auto handler = delete_resource_handler(nullptr);
+    const auto body =
+        body_of(invoke_get(handler, make_delete_request(), "bad"));
+    EXPECT_EQ(body["error"]["code"], "RESOURCE_NOT_FOUND");
+}
+
+TEST(DeleteResourceHandlerTest, ErrorResponseHasEnvelopeShape)
+{
+    auto handler = delete_resource_handler(nullptr);
+    const auto body =
+        body_of(invoke_get(handler, make_delete_request(), "bad"));
 
     EXPECT_TRUE(body["data"].is_null());
     EXPECT_TRUE(body.contains("error"));

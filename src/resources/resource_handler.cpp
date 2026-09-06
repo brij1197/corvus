@@ -346,4 +346,56 @@ namespace corvus::resources
             }
         };
     }
+    ResourceIdHandler delete_resource_handler(std::shared_ptr<ResourceService> service)
+    {
+        return [service](const drogon::HttpRequestPtr &req,
+                         HandlerCallback &&callback,
+                         const std::string &id)
+        {
+            const auto request_id = corvus::api::get_request_id(req);
+            const auto client_id = corvus::auth::get_client_id(req);
+
+            if (client_id.empty())
+            {
+                LOG_ERROR << "client_id missing on authenticated route "
+                          << "(request_id=" << request_id << ")";
+                callback(corvus::api::respond_error(
+                    corvus::api::ErrorCode::internal_error,
+                    "An unexpected error occurred.",
+                    request_id));
+                return;
+            }
+
+            if (!is_uuid(id))
+            {
+                callback(corvus::api::respond_error(
+                    corvus::api::ErrorCode::resource_not_found,
+                    "Resource not found: " + id,
+                    request_id));
+                return;
+            }
+
+            try
+            {
+                service->remove(client_id, id);
+                callback(corvus::api::respond_ok(Json::Value(), request_id));
+            }
+            catch (const ResourceNotFound &e)
+            {
+                callback(corvus::api::respond_error(
+                    corvus::api::ErrorCode::resource_not_found,
+                    e.what(),
+                    request_id));
+            }
+            catch (const std::exception &e)
+            {
+                LOG_ERROR << "delete resource failed (request_id=" << request_id
+                          << "): " << e.what();
+                callback(corvus::api::respond_error(
+                    corvus::api::ErrorCode::internal_error,
+                    "An unexpected error occurred.",
+                    request_id));
+            }
+        };
+    }
 } // namespace corvus::resources
