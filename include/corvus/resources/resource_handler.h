@@ -24,4 +24,6 @@ namespace corvus::resources
 
     ResourceIdHandler update_resource_handler(std::shared_ptr<ResourceService> service);
 
+    ResourceIdHandler delete_resource_handler(std::shared_ptr<ResourceService> service);
+
 } // namespace corvus::resources
