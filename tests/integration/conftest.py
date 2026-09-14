@@ -149,6 +149,71 @@ def api_key(redis) -> str:
     redis.delete(rkey)
 
 
+class Tenant:
+    """A real client row plus credentials that authenticate as it."""
+
+    def __init__(self, client_id: str, api_key: str, jwt: str):
+        self.client_id = client_id
+        self.api_key = api_key
+        self.jwt = jwt
+
+    @property
+    def headers(self) -> dict:
+        """Both credentials: every /v1/* route requires JWT *and* API key."""
+        return {
+            "Authorization": f"Bearer {self.jwt}",
+            "X-Api-Key": self.api_key,
+        }
+
+
+def _make_tenant(pg_conn, redis, label: str) -> Tenant:
+    cur = pg_conn.cursor()
+    cur.execute(
+        "INSERT INTO clients (name) VALUES (%s) RETURNING id",
+        (f"itest-{label}-{time.time_ns()}",),
+    )
+    client_id = str(cur.fetchone()[0])
+
+    raw_key = f"itest-{label}-key-{time.time_ns()}"
+    cur.execute(
+        "INSERT INTO api_keys (client_id, key_hash, scopes) VALUES (%s, %s, %s)",
+        (client_id, sha256_hex(raw_key), "read,write"),
+    )
+    cur.close()
+
+    redis.hset(
+        redis_key(raw_key),
+        mapping={"client_id": client_id, "scopes": "read,write"},
+    )
+    return Tenant(client_id, raw_key, make_jwt(subject=f"itest-{label}"))
+
+
+def _drop_tenant(pg_conn, redis, tenant: Tenant) -> None:
+    redis.delete(redis_key(tenant.api_key))
+    for key in redis.scan_iter(f"corvus:resource:{tenant.client_id}:*"):
+        redis.delete(key)
+
+    cur = pg_conn.cursor()
+    cur.execute("DELETE FROM clients WHERE id = %s", (tenant.client_id,))
+    cur.close()
+
+
+@pytest.fixture
+def tenant(pg_conn, redis) -> Tenant:
+    """An isolated tenant: clients row, API key in Postgres and Redis, JWT."""
+    t = _make_tenant(pg_conn, redis, "a")
+    yield t
+    _drop_tenant(pg_conn, redis, t)
+
+
+@pytest.fixture
+def other_tenant(pg_conn, redis) -> Tenant:
+    """A second, unrelated tenant — for verifying cross-tenant isolation."""
+    t = _make_tenant(pg_conn, redis, "b")
+    yield t
+    _drop_tenant(pg_conn, redis, t)
+
+
 @pytest.fixture(scope="session", autouse=True)
 def wait_for_server():
     """Block until corvus-core is healthy before running any test."""
