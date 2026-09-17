@@ -1,3 +1,4 @@
+import time
 import pytest
 
 RESOURCES = "/v1/resources"
@@ -436,23 +437,36 @@ class TestDeleteResource:
         assert resp.status_code == 201
 
 
+def get_past_rate_limit(client, path, headers=None, attempts=6):
+    for attempt in range(attempts):
+        resp = client.get(path, headers=headers or {})
+        if resp.status_code != 429:
+            return resp
+        time.sleep(1 + attempt)
+
+    pytest.fail(f"still rate limited after {attempts} attempts on {path}")
+
+
 class TestResourceAuth:
     @pytest.mark.parametrize("path", [RESOURCES, f"{RESOURCES}/x"])
     def test_no_credentials_returns_401(self, client, path):
-        assert client.get(path).status_code == 401
+        assert get_past_rate_limit(client, path).status_code == 401
 
     def test_jwt_without_api_key_returns_401(self, client, tenant):
-        resp = client.get(RESOURCES, headers={"Authorization": f"Bearer {tenant.jwt}"})
+        resp = get_past_rate_limit(
+            client, RESOURCES, {"Authorization": f"Bearer {tenant.jwt}"}
+        )
         assert resp.status_code == 401
 
     def test_api_key_without_jwt_returns_401(self, client, tenant):
-        resp = client.get(RESOURCES, headers={"X-Api-Key": tenant.api_key})
+        resp = get_past_rate_limit(client, RESOURCES, {"X-Api-Key": tenant.api_key})
         assert resp.status_code == 401
 
     def test_unknown_api_key_returns_401(self, client, tenant):
-        resp = client.get(
+        resp = get_past_rate_limit(
+            client,
             RESOURCES,
-            headers={
+            {
                 "Authorization": f"Bearer {tenant.jwt}",
                 "X-Api-Key": "no-such-key",
             },
