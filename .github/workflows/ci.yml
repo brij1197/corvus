@@ -227,6 +227,18 @@ jobs:
         run: bash scripts/wait-for-healthy.sh localhost 8080 30 5
 
       - name: Run integration tests
+        # conftest.py defaults CORVUS_DB_PASSWORD to corvus_dev (the local
+        # value), but the compose stack here is started with corvus_ci. Without
+        # these the connection fails auth and every datastore-backed test
+        # calls pytest.skip.
+        env:
+          CORVUS_DB_HOST: localhost
+          CORVUS_DB_PORT: "5433"
+          CORVUS_DB_NAME: corvus
+          CORVUS_DB_USER: corvus
+          CORVUS_DB_PASSWORD: corvus_ci
+          CORVUS_REDIS_HOST: localhost
+          CORVUS_REDIS_PORT: "6380"
         run: |
           if [ -d tests/integration ] && [ -n "$(find tests/integration -name '*.py' | head -1)" ]; then
             pytest tests/integration -v
