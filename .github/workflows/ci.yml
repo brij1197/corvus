@@ -223,17 +223,20 @@ jobs:
 
       - name: Start stack
         run: docker compose up -d --build
-
-      - name: Verify datastores are reachable from the runner
-        run: |
-          sudo apt-get update && sudo apt-get install -y --no-install-recommends \
-            postgresql-client redis-tools
-          PGPASSWORD=corvus_ci psql -h 127.0.0.1 -p 5433 -U corvus -d corvus -c 'SELECT 1'
-          redis-cli -h 127.0.0.1 -p 6380 ping
         env:
           POSTGRES_PASSWORD: corvus_ci
           GRAFANA_PASSWORD: admin
           CORVUS_JWT_PUBLIC_KEY: ${{ env.CORVUS_JWT_PUBLIC_KEY }}
+
+      - name: Verify datastores are reachable from the runner
+        env:
+          POSTGRES_PASSWORD: corvus_ci
+        run: |
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends \
+            postgresql-client redis-tools
+          PGPASSWORD="$POSTGRES_PASSWORD" \
+            psql -h 127.0.0.1 -p 5433 -U corvus -d corvus -c 'SELECT 1'
+          redis-cli -h 127.0.0.1 -p 6380 ping
 
       - name: Show corvus-core logs
         run: |
