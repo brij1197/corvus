@@ -101,6 +101,25 @@ def client() -> httpx.Client:
         yield client
 
 
+class PatientClient(httpx.Client):
+    max_attempts = 6
+
+    def request(self, *args, **kwargs):
+        for attempt in range(self.max_attempts):
+            response = super().request(*args, **kwargs)
+            if response.status_code != 429:
+                return response
+            time.sleep(1 + attempt)
+        return response
+
+
+@pytest.fixture(scope="session")
+def api() -> PatientClient:
+    """Use for tests about resource behaviour, not about rate limiting."""
+    with PatientClient(base_url=BASE_URL, timeout=10.0) as c:
+        yield c
+
+
 @pytest.fixture(scope="session")
 def redis() -> redis_client.Redis:
     r = redis_client.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
