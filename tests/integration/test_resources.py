@@ -351,12 +351,16 @@ class TestUpdateResource:
 
     def test_other_tenant_cannot_update(self, client, tenant, other_tenant):
         created = create_resource(client, tenant, name="u-private")
-        resp = client.patch(
-            f"{RESOURCES}/{created['id']}",
-            headers=other_tenant.headers,
-            json={"status": "hijacked"},
+        url = f"{RESOURCES}/{created['id']}"
+
+        assert (
+            client.patch(
+                url, headers=other_tenant.headers, json={"status": "hijacked"}
+            ).status_code
+            == 404
         )
-        assert resp.status_code == 404
+        after = client.get(url, headers=tenant.headers).json()["data"]
+        assert after == created
 
 
 class TestDeleteResource:
