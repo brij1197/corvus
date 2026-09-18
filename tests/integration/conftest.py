@@ -12,6 +12,8 @@ Requires:
   CORVUS_DB_NAME           - defaults to corvus
   CORVUS_DB_USER           - defaults to corvus
   CORVUS_DB_PASSWORD       - defaults to corvus_dev
+  CORVUS_REQUIRE_DEPS      - if set, missing Postgres/Redis fails instead of
+                             skipping
 """
 
 import os
@@ -28,6 +30,8 @@ try:
     import jwt as pyjwt
 except ImportError:
     pyjwt = None
+
+REQUIRE_DEPS = bool(os.environ.get("CORVUS_REQUIRE_DEPS"))
 
 BASE_URL = os.environ.get("CORVUS_BASE_URL", "http://localhost:8080")
 REDIS_HOST = os.environ.get("CORVUS_REDIS_HOST", "localhost")
@@ -79,6 +83,13 @@ def redis_key(api_key: str) -> str:
     return f"corvus:apikeys:{sha256_hex(api_key)}"
 
 
+def unavailable(what: str, detail: str):
+    message = f"{what} unavailable: {detail}"
+    if REQUIRE_DEPS:
+        pytest.fail(message, pytrace=False)
+    pytest.skip(message)
+
+
 @pytest.fixture(scope="session")
 def base_url() -> str:
     return BASE_URL
@@ -90,13 +101,32 @@ def client() -> httpx.Client:
         yield client
 
 
+class PatientClient(httpx.Client):
+    max_attempts = 6
+
+    def request(self, *args, **kwargs):
+        for attempt in range(self.max_attempts):
+            response = super().request(*args, **kwargs)
+            if response.status_code != 429:
+                return response
+            time.sleep(1 + attempt)
+        return response
+
+
+@pytest.fixture(scope="session")
+def api() -> PatientClient:
+    """Use for tests about resource behaviour, not about rate limiting."""
+    with PatientClient(base_url=BASE_URL, timeout=10.0) as c:
+        yield c
+
+
 @pytest.fixture(scope="session")
 def redis() -> redis_client.Redis:
     r = redis_client.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
     try:
         r.ping()
     except Exception as e:
-        pytest.skip(f"Redis not reachable at {REDIS_HOST}:{REDIS_PORT} - {e}")
+        unavailable("Redis", f"{REDIS_HOST}:{REDIS_PORT} - {e}")
     return r
 
 
@@ -115,7 +145,7 @@ def pg_conn():
         )
         conn.autocommit = True
     except Exception as e:
-        pytest.skip(f"Postgres not reachable at {DB_HOST}:{DB_PORT} - {e}")
+        unavailable("Postgres", f"{DB_HOST}:{DB_PORT} - {e}")
         return
     yield conn
     conn.close()
