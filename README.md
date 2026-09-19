@@ -32,7 +32,7 @@ The full observability stack (Prometheus, Grafana, Loki, Jaeger) ships as first-
 └─────────────────────────────────────────────────────┘
 ```
 
-Full architecture documentation lives in [`docs/architecture/overview.md`](docs/architecture/overview.md).
+Design decisions and their rationale are recorded as [Architecture Decision Records](docs/adr/); the database schema is documented in [`docs/architecture/schema.md`](docs/architecture/schema.md).
 
 ---
 
@@ -68,9 +68,9 @@ Full architecture documentation lives in [`docs/architecture/overview.md`](docs/
 | ------------------------ | ----------- |
 | C++ project scaffold     | ✅ Complete |
 | API gateway + auth       | ✅ Complete |
-| PostgreSQL + Redis layer | Planned     |
-| Resource manager domain  | Planned     |
-| Prometheus + Grafana     | Planned     |
+| PostgreSQL + Redis layer | ✅ Complete |
+| Resource manager domain  | ✅ Complete |
+| Prometheus + Grafana     | In progress |
 | Event bus                | Planned     |
 | Policy engine            | Planned     |
 | TimescaleDB + audit log  | Planned     |
@@ -126,8 +126,6 @@ export CORVUS_TEST_PRIVATE_KEY="$(cat /tmp/corvus_test.pem)"
 pytest tests/integration -v
 ```
 
-Full local development guide: [`docs/operations/local-dev.md`](docs/operations/local-dev.md)
-
 ---
 
 ## Repository structure
@@ -171,18 +169,10 @@ corvus/
 
 ## Documentation
 
-- [Architecture overview](docs/architecture/overview.md)
-- [Language strategy](docs/architecture/language-strategy.md)
-- [Security model](docs/architecture/security-model.md)
 - [Local development guide](docs/operations/local-dev.md)
-- [API reference](docs/api/resources.md)
+- [Manual API testing](docs/operations/manual-api-testing.md)
+- [Database schema](docs/architecture/schema.md)
 - [Architecture Decision Records](docs/adr/)
-
----
-
-## Contributing
-
-This is a personal project built incrementally. Each feature is developed on a branch, validated by CI, and merged via pull request - even as a solo project. See [`docs/operations/local-dev.md`](docs/operations/local-dev.md) for the full development workflow.
 
 ---
 
