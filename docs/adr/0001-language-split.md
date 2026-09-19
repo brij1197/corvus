@@ -30,7 +30,7 @@ The two layers communicate exclusively over the versioned REST API (`/v1/`).
 ## Alternatives considered
 
 1. **Pure C++** - CLI and test tooling in C++ is slower to iterate on.
-2. **Pure Python** - loses memory safety and systems-level control.
+2. **Pure Python** - gives up control over memory layout, predictable latency without GC pauses, and direct access to systems interfaces.
 3. **Go for operator layer** - valid choice, Python chosen for ecosystem depth.
 
 ## Consequences
