@@ -8,6 +8,7 @@ ARG GIT_SHA
 ENV DEBIAN_FRONTEND=noninteractive
 ENV VCPKG_ROOT=/opt/vcpkg
 ENV VCPKG_DISABLE_METRICS=1
+ENV VCPKG_INSTALLED_DIR=/build/vcpkg_installed
 
 # ── System dependencies + CMake 3.28 from Kitware ─────────────────────────
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -37,7 +38,8 @@ WORKDIR /build
 # ── Dependency layer - cached as long as vcpkg.json does not change ───────
 COPY vcpkg.json .
 RUN --mount=type=cache,target=/root/.cache/vcpkg \
-    $VCPKG_ROOT/vcpkg install --triplet x64-linux
+    $VCPKG_ROOT/vcpkg install --triplet x64-linux \
+    --x-install-root=$VCPKG_INSTALLED_DIR
 
 # ── Source layer ───────────────────────────────────────────────────────────
 COPY CMakeLists.txt CMakePresets.json ./
@@ -55,10 +57,13 @@ COPY db/      db/
 # Only "ci" is stripped/copied into the runtime image - the others are
 # built and run from the builder stage directly via `docker run`.
 ARG CMAKE_PRESET=ci
+ARG BUILD_TARGET=
 RUN --mount=type=cache,target=/root/.ccache \
     cmake --preset ${CMAKE_PRESET} \
     -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+    -DVCPKG_INSTALLED_DIR=${VCPKG_INSTALLED_DIR} \
     && cmake --build --preset ${CMAKE_PRESET} \
+    ${BUILD_TARGET:+--target ${BUILD_TARGET}} \
     && if [ "${CMAKE_PRESET}" = "ci" ]; then strip build/src/corvus-core; fi
 
 # ── Collect shared library dependencies ───────────────────────────────────
