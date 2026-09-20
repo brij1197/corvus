@@ -115,7 +115,9 @@ jobs:
           VCPKG_ROOT: ${{ github.workspace }}/vcpkg
 
       - name: Configure CMake
-        run: cmake --preset ci
+        run: |
+          cmake --preset ci \
+            -DVCPKG_INSTALLED_DIR=${{ github.workspace }}/vcpkg_installed
         env:
           VCPKG_ROOT: ${{ github.workspace }}/vcpkg
 
@@ -208,10 +210,28 @@ jobs:
           cat /tmp/corvus_test_pub.pem >> $GITHUB_ENV
           echo "EOF_KEY" >> $GITHUB_ENV
 
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Restore Docker layer cache
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: buildx-${{ hashFiles('vcpkg.json', 'deploy/docker/Dockerfile') }}-${{ github.sha }}
+          restore-keys: |
+            buildx-${{ hashFiles('vcpkg.json', 'deploy/docker/Dockerfile') }}-
+            buildx-
+
       - name: Expose Postgres and Redis on loopback
         run: |
           cat > docker-compose.override.yml <<'EOF'
           services:
+            corvus-core:
+              build:
+                cache_from:
+                  - type=local,src=/tmp/.buildx-cache
+                cache_to:
+                  - type=local,dest=/tmp/.buildx-cache-new,mode=max
             postgres:
               ports:
                 - "127.0.0.1:5433:5432"
@@ -223,6 +243,14 @@ jobs:
 
       - name: Start stack
         run: docker compose up -d --build
+
+      - name: Rotate Docker layer cache
+        if: always()
+        run: |
+          rm -rf /tmp/.buildx-cache
+          if [ -d /tmp/.buildx-cache-new ]; then
+            mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+          fi
         env:
           POSTGRES_PASSWORD: corvus_ci
           GRAFANA_PASSWORD: admin
