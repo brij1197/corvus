@@ -196,6 +196,9 @@ jobs:
       - name: Install Python test deps
         run: pip install -r requirements-dev.txt
 
+      - name: Check workflow invariants
+        run: python3 scripts/check-workflow.py
+
       - name: Generate test JWT keypair
         run: |
           openssl genrsa -out /tmp/corvus_test.pem 2048
@@ -243,6 +246,10 @@ jobs:
 
       - name: Start stack
         run: docker compose up -d --build
+        env:
+          POSTGRES_PASSWORD: corvus_ci
+          GRAFANA_PASSWORD: admin
+          CORVUS_JWT_PUBLIC_KEY: ${{ env.CORVUS_JWT_PUBLIC_KEY }}
 
       - name: Rotate Docker layer cache
         if: always()
@@ -251,10 +258,6 @@ jobs:
           if [ -d /tmp/.buildx-cache-new ]; then
             mv /tmp/.buildx-cache-new /tmp/.buildx-cache
           fi
-        env:
-          POSTGRES_PASSWORD: corvus_ci
-          GRAFANA_PASSWORD: admin
-          CORVUS_JWT_PUBLIC_KEY: ${{ env.CORVUS_JWT_PUBLIC_KEY }}
 
       - name: Verify datastores are reachable from the runner
         env:
