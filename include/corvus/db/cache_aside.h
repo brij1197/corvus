@@ -2,6 +2,7 @@
 #include "corvus/db/redis_connection.h"
 #include <chrono>
 #include <functional>
+#include <mutex>
 #include <optional>
 #include <string>
 
@@ -45,8 +46,15 @@ namespace corvus::db
             return (ttl_seconds < 0) ? config_.default_ttl_seconds : ttl_seconds;
         }
 
+        bool ensure_connected_locked();
+
+        static constexpr std::chrono::seconds kReconnectBackoff{1};
+
         RedisConnection &redis_;
         CacheConfig config_;
+
+        std::mutex mutex_;
+        std::chrono::steady_clock::time_point next_reconnect_{};
     };
 
 } // namespace corvus::db
