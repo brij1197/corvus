@@ -27,9 +27,9 @@ namespace corvus::db
 
         std::optional<std::string> get(const std::string &key);
 
-        void put(const std::string &key, const std::string &value, int ttl_seconds = -1);
+        bool put(const std::string &key, const std::string &value, int ttl_seconds = -1);
 
-        void invalidate(const std::string &key);
+        bool invalidate(const std::string &key);
 
         void invalidate_prefix(const std::string &prefix);
 
