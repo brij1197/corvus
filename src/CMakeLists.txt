@@ -40,6 +40,7 @@ target_compile_features(corvus-db PUBLIC cxx_std_20)
 add_library(corvus-gateway STATIC
   gateway/router.cpp
   gateway/health_handler.cpp
+  gateway/health_probe.cpp
   gateway/readiness_handler.cpp
   gateway/not_found_handler.cpp
   gateway/rate_limiter.cpp

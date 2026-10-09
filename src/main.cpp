@@ -1,5 +1,6 @@
 #include <drogon/drogon.h>
 #include "corvus/gateway/router.h"
+#include "corvus/gateway/health_probe.h"
 #include "corvus/gateway/rate_limiter.h"
 #include "corvus/gateway/request_size_limit.h"
 #include "corvus/gateway/request_id_middleware.h"
@@ -25,6 +26,7 @@
 
 namespace
 {
+    constexpr int kListenPort = 8080;
 
     std::string env_or(const char *var, const char *fallback)
     {
@@ -47,8 +49,11 @@ int main(int argc, char *argv[])
 {
     if (argc > 1 && std::strcmp(argv[1], "--health-check") == 0)
     {
-        std::cout << "ok\n";
-        return 0;
+        const auto result = corvus::gateway::probe_http_health(
+            "127.0.0.1", kListenPort);
+        (result.healthy ? std::cout : std::cerr)
+            << (result.healthy ? "ok: " : "unhealthy: ") << result.detail << "\n";
+        return result.healthy ? 0 : 1;
     }
 
     std::shared_ptr<corvus::auth::JwtValidator> jwt_validator;
@@ -166,7 +171,7 @@ int main(int argc, char *argv[])
     drogon::app()
         .setLogPath("")
         .setLogLevel(trantor::Logger::kInfo)
-        .addListener("0.0.0.0", 8080)
+        .addListener("0.0.0.0", kListenPort)
         .setThreadNum(4)
         .setClientMaxBodySize(10 * 1024 * 1024)
         .setClientMaxMemoryBodySize(10 * 1024 * 1024)
