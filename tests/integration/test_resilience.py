@@ -194,3 +194,48 @@ class TestCacheConnectionDropped:
             time.sleep(0.2)
 
         assert redis.exists(key), "cache did not repopulate after reconnect"
+
+
+@contextmanager
+def redis_denies_all_keys(redis):
+    """Make every key lookup fail, API-key lookups included."""
+    redis.execute_command("ACL", "SETUSER", "default", "resetkeys")
+    try:
+        yield
+    finally:
+        redis.execute_command("ACL", "SETUSER", "default", "allkeys")
+
+
+class TestAuthBackendUnavailable:
+    """
+    API keys live in Redis. When Redis can't answer, the key may be perfectly
+    valid, so the API must say "try again" (503), not "your key is bad" (401).
+    """
+
+    def test_returns_503_not_401_when_key_lookup_fails(self, api, tenant, redis):
+        resource = create_resource(api, tenant, "auth-down")
+
+        with redis_denies_all_keys(redis):
+            resp = api.get(url_for(resource), headers=tenant.headers)
+
+        assert resp.status_code == 503, resp.text
+        body = resp.json()
+        assert body["error"]["code"] == "SERVICE_UNAVAILABLE"
+        assert body["data"] is None
+        assert int(resp.headers["retry-after"]) > 0
+
+    def test_unknown_key_is_still_401_when_redis_is_healthy(self, api, tenant):
+        headers = {**tenant.headers, "X-Api-Key": "itest-never-issued"}
+        resp = api.get(RESOURCES, headers=headers)
+
+        assert resp.status_code == 401
+        assert resp.json()["error"]["code"] == "UNAUTHORIZED"
+
+    def test_same_key_works_again_once_redis_recovers(self, api, tenant, redis):
+        resource = create_resource(api, tenant, "auth-recover")
+
+        with redis_denies_all_keys(redis):
+            assert api.get(url_for(resource), headers=tenant.headers).status_code == 503
+
+        resp = api.get(url_for(resource), headers=tenant.headers)
+        assert resp.status_code == 200, resp.text
