@@ -7,6 +7,7 @@ pkg_check_modules(LIBPQXX REQUIRED libpqxx)
 add_executable(corvus-unit-tests
   test_version.cpp
   test_health_handler.cpp
+  test_health_probe.cpp
   test_router.cpp
   test_envelope.cpp
   test_jwt_validator.cpp
@@ -51,6 +52,7 @@ gtest_add_tests(
   TARGET      corvus-unit-tests
   SOURCES     test_version.cpp
               test_health_handler.cpp
+              test_health_probe.cpp
               test_router.cpp
               test_envelope.cpp
               test_jwt_validator.cpp
