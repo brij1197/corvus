@@ -33,12 +33,10 @@ namespace corvus::auth
                     return;
                 }
 
+                ApiKeyInfo info;
                 try
                 {
-                    const ApiKeyInfo info = validator->validate(raw_key);
-                    req->getAttributes()->insert(kClientIdKey, info.client_id);
-
-                    next();
+                    info = validator->validate(raw_key);
                 }
                 catch (const ApiKeyValidationError &e)
                 {
@@ -51,7 +49,25 @@ namespace corvus::auth
                         request_id);
                     resp->addHeader("X-Request-ID", request_id);
                     cb(resp);
+                    return;
                 }
+                catch (const ApiKeyBackendError &e)
+                {
+                    LOG_ERROR << "API key check unavailable (request_id="
+                              << request_id << "): " << e.what();
+
+                    auto resp = corvus::api::respond_error(
+                        corvus::api::ErrorCode::service_unavailable,
+                        "Authentication is temporarily unavailable. Try again later.",
+                        request_id);
+                    resp->addHeader("X-Request-ID", request_id);
+                    resp->addHeader("Retry-After", "5");
+                    cb(resp);
+                    return;
+                }
+
+                req->getAttributes()->insert(kClientIdKey, info.client_id);
+                next();
             });
     }
 } // namespace corvus::auth

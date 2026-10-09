@@ -3,6 +3,7 @@
 #include <hiredis/hiredis.h>
 #include <cstdlib>
 #include <string>
+#include <type_traits>
 
 static std::string redis_host()
 {
@@ -114,4 +115,72 @@ TEST_F(ApiKeyValidatorTest, HashIsDeterministic)
     const std::string raw = seed_key("svc-idempotent");
     EXPECT_NO_THROW(validator_->validate(raw));
     EXPECT_NO_THROW(validator_->validate(raw));
+}
+
+namespace
+{
+    redisReply *run(const char *cmd)
+    {
+        redisContext *c = redisConnect(redis_host().c_str(), redis_port());
+        if (!c || c->err)
+        {
+            if (c)
+                redisFree(c);
+            return nullptr;
+        }
+        auto *r = static_cast<redisReply *>(redisCommand(c, cmd));
+        redisFree(c);
+        return r;
+    }
+
+    class DenyAllKeys
+    {
+    public:
+        DenyAllKeys()
+        {
+            auto *r = run("ACL SETUSER default resetkeys");
+            active_ = r && r->type == REDIS_REPLY_STATUS;
+            if (r)
+                freeReplyObject(r);
+        }
+        ~DenyAllKeys()
+        {
+            if (auto *r = run("ACL SETUSER default allkeys"))
+                freeReplyObject(r);
+        }
+        bool active() const { return active_; }
+
+    private:
+        bool active_{false};
+    };
+} // namespace
+
+TEST_F(ApiKeyValidatorTest, RedisErrorReplyIsBackendErrorNotRejection)
+{
+    const std::string raw = seed_key("svc-acl");
+
+    DenyAllKeys deny;
+    if (!deny.active())
+        GTEST_SKIP() << "Redis ACLs unavailable (needs Redis 6+)";
+
+    EXPECT_THROW(validator_->validate(raw), corvus::auth::ApiKeyBackendError);
+}
+
+TEST(ApiKeyBackendErrorTest, IsNotAValidationError)
+{
+    static_assert(!std::is_base_of_v<corvus::auth::ApiKeyValidationError,
+                                     corvus::auth::ApiKeyBackendError>);
+    SUCCEED();
+}
+
+TEST_F(ApiKeyValidatorTest, ValidatesAgainAfterRedisRecovers)
+{
+    const std::string raw = seed_key("svc-recover");
+    {
+        DenyAllKeys deny;
+        if (!deny.active())
+            GTEST_SKIP() << "Redis ACLs unavailable (needs Redis 6+)";
+        EXPECT_THROW(validator_->validate(raw), corvus::auth::ApiKeyBackendError);
+    }
+    EXPECT_EQ(validator_->validate(raw).client_id, "svc-recover");
 }

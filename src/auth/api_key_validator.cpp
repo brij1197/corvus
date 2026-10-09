@@ -94,6 +94,9 @@ namespace corvus::auth
             }
             throw ApiKeyConfigError(msg);
         }
+
+        struct timeval command_timeout = {1, 0};
+        redisSetTimeout(c, command_timeout);
         return c;
     }
 
@@ -114,21 +117,30 @@ namespace corvus::auth
         }
         catch (const ApiKeyConfigError &e)
         {
-            throw ApiKeyValidationError(
+            throw ApiKeyBackendError(
                 std::string("Redis unavailable, cannot validate API key: ") + e.what());
         }
 
         // HGETALL corvus:apikeys:<hash>
         auto *reply = static_cast<redisReply *>(
             redisCommand(c, "HGETALL %s", rkey.c_str()));
+        const std::string context_error = c->err ? c->errstr : "";
         redisFree(c);
 
         if (!reply)
         {
-            throw ApiKeyValidationError("Redis returned null reply");
+            throw ApiKeyBackendError(
+                "Redis did not answer API key lookup" +
+                (context_error.empty() ? std::string{} : ": " + context_error));
         }
 
-        // HGETALL returns flat array: [field, value, field, value, ...]
+        if (reply->type == REDIS_REPLY_ERROR)
+        {
+            const std::string err = reply->str ? reply->str : "unknown error";
+            freeReplyObject(reply);
+            throw ApiKeyBackendError("Redis rejected API key lookup: " + err);
+        }
+
         if (reply->type != REDIS_REPLY_ARRAY || reply->elements == 0)
         {
             freeReplyObject(reply);
