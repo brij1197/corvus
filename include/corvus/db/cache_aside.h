@@ -12,6 +12,7 @@ namespace corvus::db
     {
         int default_ttl_seconds{300};
         std::string key_prefix{"corvus:"};
+        int version_ttl_seconds{600};
     };
 
     class CacheAside
@@ -35,6 +36,17 @@ namespace corvus::db
         void invalidate_prefix(const std::string &prefix);
 
         bool exists(const std::string &key);
+
+        std::optional<std::string> version(const std::string &key);
+
+        bool put_if_version(const std::string &key,
+                            const std::string &expected_version,
+                            const std::string &value,
+                            int ttl_seconds = -1);
+
+        bool invalidate_versioned(const std::string &key);
+
+        std::string version_key(const std::string &key) const;
 
         const CacheConfig &config() const noexcept { return config_; }
 

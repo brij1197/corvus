@@ -1,6 +1,7 @@
 #include "corvus/db/cache_aside.h"
 #include <drogon/drogon.h>
 #include <hiredis/hiredis.h>
+#include <cstring>
 
 namespace corvus::db
 {
@@ -14,6 +15,32 @@ namespace corvus::db
     {
         return config_.key_prefix + key;
     }
+
+    std::string CacheAside::version_key(const std::string &key) const
+    {
+        return config_.key_prefix + "ver:" + key;
+    }
+
+    namespace
+    {
+        constexpr const char *kPutIfVersion = R"lua(
+local current = redis.call('GET', KEYS[2]) or '0'
+if current ~= ARGV[1] then return 0 end
+if tonumber(ARGV[3]) > 0 then
+  redis.call('SET', KEYS[1], ARGV[2], 'EX', ARGV[3])
+else
+  redis.call('SET', KEYS[1], ARGV[2])
+end
+return 1
+)lua";
+
+        constexpr const char *kInvalidateVersioned = R"lua(
+redis.call('INCR', KEYS[2])
+redis.call('EXPIRE', KEYS[2], ARGV[1])
+redis.call('DEL', KEYS[1])
+return 1
+)lua";
+    } // namespace
 
     bool CacheAside::ensure_connected_locked()
     {
@@ -160,6 +187,93 @@ namespace corvus::db
             LOG_ERROR << "cache invalidate_prefix failed for " << pattern
                       << "; matching entries are stale until TTL: " << e.what();
         }
+    }
+
+    std::optional<std::string> CacheAside::version(const std::string &key)
+    {
+        const auto vkey = version_key(key);
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (!ensure_connected_locked())
+            return std::nullopt;
+        try
+        {
+            const auto v = redis_.get(vkey);
+            return v.empty() ? std::string{"0"} : v;
+        }
+        catch (const std::exception &e)
+        {
+            LOG_WARN << "cache version read failed for " << vkey
+                     << ", not populating: " << e.what();
+            return std::nullopt;
+        }
+    }
+
+    bool CacheAside::put_if_version(const std::string &key,
+                                    const std::string &expected_version,
+                                    const std::string &value,
+                                    int ttl_seconds)
+    {
+        const auto full_key = make_key(key);
+        const auto vkey = version_key(key);
+        const auto ttl = std::to_string(effective_ttl(ttl_seconds));
+
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (!ensure_connected_locked())
+            return false;
+
+        const char *argv[] = {"EVAL", kPutIfVersion, "2",
+                              full_key.c_str(), vkey.c_str(),
+                              expected_version.c_str(), value.data(), ttl.c_str()};
+        const std::size_t argvlen[] = {4, std::strlen(kPutIfVersion), 1,
+                                       full_key.size(), vkey.size(),
+                                       expected_version.size(), value.size(), ttl.size()};
+
+        RedisReply reply(static_cast<redisReply *>(
+            redisCommandArgv(redis_.ctx(), 8, argv, argvlen)));
+        if (!reply || reply.is_error())
+        {
+            LOG_WARN << "cache versioned put failed for " << full_key << ": "
+                     << (reply ? reply->str : redis_.ctx()->errstr);
+            return false;
+        }
+        if (reply->type == REDIS_REPLY_INTEGER && reply->integer == 0)
+        {
+            LOG_DEBUG << "skipping cache put for " << full_key
+                      << ": superseded by a concurrent write";
+            return false;
+        }
+        return true;
+    }
+
+    bool CacheAside::invalidate_versioned(const std::string &key)
+    {
+        const auto full_key = make_key(key);
+        const auto vkey = version_key(key);
+        const auto ttl = std::to_string(config_.version_ttl_seconds);
+
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (!ensure_connected_locked())
+        {
+            LOG_ERROR << "cache invalidate skipped for " << full_key
+                      << ", Redis unreachable; entry is stale until its TTL expires";
+            return false;
+        }
+
+        const char *argv[] = {"EVAL", kInvalidateVersioned, "2",
+                              full_key.c_str(), vkey.c_str(), ttl.c_str()};
+        const std::size_t argvlen[] = {4, std::strlen(kInvalidateVersioned), 1,
+                                       full_key.size(), vkey.size(), ttl.size()};
+
+        RedisReply reply(static_cast<redisReply *>(
+            redisCommandArgv(redis_.ctx(), 6, argv, argvlen)));
+        if (!reply || reply.is_error())
+        {
+            LOG_ERROR << "cache invalidate failed for " << full_key
+                      << "; entry is stale until its TTL expires: "
+                      << (reply ? reply->str : redis_.ctx()->errstr);
+            return false;
+        }
+        return true;
     }
 
     bool CacheAside::exists(const std::string &key)
