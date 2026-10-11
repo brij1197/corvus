@@ -29,6 +29,36 @@ def main():
             "every credentialled test fails auth."
         )
 
+    if start is not None and "--no-build" not in (start.get("run") or ""):
+        failures.append(
+            "'Start stack' must run `docker compose up --no-build`. Letting "
+            "Compose build goes through Bake, which fails in CI on fs "
+            "entitlements for the layer cache."
+        )
+
+    names = [s.get("name") or "" for s in steps("integration-test")]
+    build = find("integration-test", "Build corvus-core image")
+    if build is None:
+        failures.append("no 'Build corvus-core image' step found")
+    else:
+        run = build.get("run") or ""
+        if "-t corvus-core:ci" not in run or "--load" not in run:
+            failures.append(
+                "the image build must `--load` and tag corvus-core:ci, the "
+                "image the compose override points corvus-core at."
+            )
+        if "Start stack" in names and names.index(
+            "Build corvus-core image"
+        ) > names.index("Start stack"):
+            failures.append("the image must be built before 'Start stack'.")
+
+    override = find("integration-test", "docker-compose.override.yml")
+    if override is None or "image: corvus-core:ci" not in (override.get("run") or ""):
+        failures.append(
+            "the compose override must set corvus-core's image to "
+            "corvus-core:ci, or `up --no-build` has no image to start."
+        )
+
     verify = find("integration-test", "Verify datastores")
     if verify is None:
         failures.append("no datastore reachability gate found")
