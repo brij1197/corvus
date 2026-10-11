@@ -1,7 +1,6 @@
 #include "corvus/auth/api_key_validator.h"
-#include <hiredis/hiredis.h>
 #include <openssl/evp.h>
-#include <cstdlib>
+#include <unordered_map>
 #include <sstream>
 #include <iomanip>
 #include <thread>
@@ -35,33 +34,22 @@ namespace corvus::auth
         return "corvus:apikeys:" + hash;
     }
 
-    ApiKeyValidator::ApiKeyValidator()
+    ApiKeyValidator::ApiKeyValidator() : config_(db::redis_config_from_env())
     {
-        const char *host = std::getenv("CORVUS_REDIS_HOST");
-        const char *port = std::getenv("CORVUS_REDIS_PORT");
-
-        host_ = (host && *host) ? host : "localhost";
-        port_ = (port && *port) ? std::stoi(port) : 6379;
-
-        // Retry up to 5 times with 1s backoff - Docker DNS may not resolve
-        // immediately even after the Redis healthcheck passes
         constexpr int kMaxAttempts = 5;
         std::string last_error;
         for (int attempt = 1; attempt <= kMaxAttempts; ++attempt)
         {
             try
             {
-                redisContext *c = connect();
-                redisFree(c);
-                return; // Connected successfully
+                connect();
+                return;
             }
-            catch (const ApiKeyConfigError &e)
+            catch (const db::RedisConfigError &e)
             {
                 last_error = e.what();
                 if (attempt < kMaxAttempts)
-                {
                     std::this_thread::sleep_for(std::chrono::seconds(1));
-                }
             }
         }
         throw ApiKeyConfigError(
@@ -69,35 +57,34 @@ namespace corvus::auth
             " attempts: " + last_error);
     }
 
-    ApiKeyValidator::ApiKeyValidator(const std::string &host, int port)
-        : host_(host), port_(port)
+    ApiKeyValidator::ApiKeyValidator(db::RedisConfig config)
+        : config_(std::move(config))
     {
-        redisContext *c = connect();
-        redisFree(c);
+        try
+        {
+            connect();
+        }
+        catch (const db::RedisConfigError &e)
+        {
+            throw ApiKeyConfigError(e.what());
+        }
+    }
+
+    ApiKeyValidator::ApiKeyValidator(const std::string &host, int port)
+        : ApiKeyValidator([&]
+                          {
+              db::RedisConfig cfg;
+              cfg.host = host;
+              cfg.port = port;
+              return cfg; }())
+    {
     }
 
     ApiKeyValidator::~ApiKeyValidator() = default;
 
-    redisContext *ApiKeyValidator::connect() const
+    db::RedisConnection ApiKeyValidator::connect() const
     {
-        struct timeval timeout = {3, 0}; // 3 seconds
-        redisContext *c = redisConnectWithTimeout(host_.c_str(), port_, timeout);
-
-        if (!c || c->err)
-        {
-            std::string msg = "Redis connection failed";
-            if (c)
-            {
-                msg += ": ";
-                msg += c->errstr;
-                redisFree(c);
-            }
-            throw ApiKeyConfigError(msg);
-        }
-
-        struct timeval command_timeout = {1, 0};
-        redisSetTimeout(c, command_timeout);
-        return c;
+        return db::RedisConnection(config_);
     }
 
     ApiKeyInfo ApiKeyValidator::validate(const std::string &raw_key) const
@@ -110,62 +97,31 @@ namespace corvus::auth
         const std::string hashed = hash_key(raw_key);
         const std::string rkey = redis_key(hashed);
 
-        redisContext *c = nullptr;
+        std::unordered_map<std::string, std::string> fields;
         try
         {
-            c = connect();
+            auto conn = connect();
+            fields = conn.hgetall(rkey);
         }
-        catch (const ApiKeyConfigError &e)
+        catch (const db::RedisConfigError &e)
         {
             throw ApiKeyBackendError(
                 std::string("Redis unavailable, cannot validate API key: ") + e.what());
         }
-
-        // HGETALL corvus:apikeys:<hash>
-        auto *reply = static_cast<redisReply *>(
-            redisCommand(c, "HGETALL %s", rkey.c_str()));
-        const std::string context_error = c->err ? c->errstr : "";
-        redisFree(c);
-
-        if (!reply)
+        catch (const db::RedisCommandError &e)
         {
             throw ApiKeyBackendError(
-                "Redis did not answer API key lookup" +
-                (context_error.empty() ? std::string{} : ": " + context_error));
+                std::string("Redis could not answer API key lookup: ") + e.what());
         }
 
-        if (reply->type == REDIS_REPLY_ERROR)
-        {
-            const std::string err = reply->str ? reply->str : "unknown error";
-            freeReplyObject(reply);
-            throw ApiKeyBackendError("Redis rejected API key lookup: " + err);
-        }
-
-        if (reply->type != REDIS_REPLY_ARRAY || reply->elements == 0)
-        {
-            freeReplyObject(reply);
+        if (fields.empty())
             throw ApiKeyValidationError("Unknown or revoked API key");
-        }
 
         ApiKeyInfo info;
-        for (size_t i = 0; i + 1 < reply->elements; i += 2)
-        {
-            const redisReply *field_reply = reply->element[i];
-            const redisReply *value_reply = reply->element[i + 1];
-            if (!field_reply || !field_reply->str ||
-                !value_reply || !value_reply->str)
-            {
-                continue;
-            }
-
-            const std::string field = field_reply->str;
-            const std::string value = value_reply->str;
-            if (field == "client_id")
-                info.client_id = value;
-            else if (field == "scopes")
-                info.scopes = value;
-        }
-        freeReplyObject(reply);
+        if (const auto it = fields.find("client_id"); it != fields.end())
+            info.client_id = it->second;
+        if (const auto it = fields.find("scopes"); it != fields.end())
+            info.scopes = it->second;
 
         if (info.client_id.empty())
         {

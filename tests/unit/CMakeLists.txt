@@ -70,3 +70,14 @@ gtest_add_tests(
               test_client_context.cpp
               test_resource_handler.cpp
 )
+
+# These temporarily change server-wide Redis settings (ACLs, requirepass),
+# so they must never overlap another test under.
+set_tests_properties(
+  ApiKeyValidatorTest.RedisErrorReplyIsBackendErrorNotRejection
+  ApiKeyValidatorTest.ValidatesAgainAfterRedisRecovers
+  ApiKeyValidatorTest.AuthenticatesWithTheConfiguredPassword
+  ApiKeyValidatorTest.MissingPasswordIsABackendErrorNotARejection
+  ApiKeyValidatorTest.WrongPasswordFailsAtStartup
+  PROPERTIES RUN_SERIAL TRUE
+)

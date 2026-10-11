@@ -78,6 +78,7 @@ target_include_directories(corvus-auth PUBLIC
 
 target_link_libraries(corvus-auth PUBLIC
   corvus-api
+  corvus-db
   Drogon::Drogon
   jwt-cpp::jwt-cpp
   hiredis::hiredis
