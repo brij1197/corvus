@@ -1,6 +1,5 @@
 #include "corvus/resources/resource_service.h"
 #include <drogon/drogon.h>
-#include <iterator>
 #include <pqxx/pqxx>
 
 namespace corvus::resources
@@ -14,57 +13,6 @@ namespace corvus::resources
     std::string ResourceService::cache_key(const std::string &client_id, const std::string &id) const
     {
         return "resource:" + client_id + ":" + id;
-    }
-
-    std::uint64_t ResourceService::capture_epoch(const std::string &key)
-    {
-        std::lock_guard<std::mutex> lock(cache_mutex_);
-        auto &entry = cache_epochs_[key];
-        if (entry.value == 0)
-            entry.value = ++epoch_counter_;
-        entry.touched = std::chrono::steady_clock::now();
-        return entry.value;
-    }
-
-    void ResourceService::cache_if_unchanged(const std::string &key,
-                                             std::uint64_t captured,
-                                             const std::string &value)
-    {
-        std::lock_guard<std::mutex> lock(cache_mutex_);
-
-        const auto it = cache_epochs_.find(key);
-        const bool unchanged =
-            (it != cache_epochs_.end()) && (it->second.value == captured);
-
-        if (!unchanged)
-        {
-            LOG_DEBUG << "skipping cache put for " << key
-                      << ": superseded by a concurrent write";
-            return;
-        }
-
-        cache_->put(key, value, kResourceCacheTtlSeconds);
-    }
-
-    void ResourceService::bump_epoch(const std::string &key)
-    {
-        std::lock_guard<std::mutex> lock(cache_mutex_);
-        auto &entry = cache_epochs_[key];
-        entry.value = ++epoch_counter_;
-        entry.touched = std::chrono::steady_clock::now();
-
-        if (cache_epochs_.size() > kEpochPruneThreshold)
-            prune_epochs_locked();
-    }
-
-    void ResourceService::prune_epochs_locked()
-    {
-        const auto cutoff = std::chrono::steady_clock::now() - kEpochRetention;
-        for (auto it = cache_epochs_.begin(); it != cache_epochs_.end();)
-        {
-            it = (it->second.touched < cutoff) ? cache_epochs_.erase(it)
-                                               : std::next(it);
-        }
     }
 
     Resource ResourceService::create(const std::string &client_id, const CreateResourceRequest &req)
@@ -85,13 +33,16 @@ namespace corvus::resources
         if (const auto cached = cache_->get(key))
             return from_json(nlohmann::json::parse(*cached));
 
-        const auto epoch_at_read = capture_epoch(key);
+        // Taken before the read so a write that lands during it is detected.
+        const auto version = cache_->version(key);
 
         const auto found = repository_->find_by_id(client_id, id);
         if (!found)
             throw ResourceNotFound("Resource not found: " + id);
 
-        cache_if_unchanged(key, epoch_at_read, to_json(*found).dump());
+        if (version)
+            cache_->put_if_version(key, *version, to_json(*found).dump(),
+                                   kResourceCacheTtlSeconds);
         return *found;
     }
 
@@ -116,8 +67,7 @@ namespace corvus::resources
             throw ResourceNotFound("Resource not found: " + id);
 
         const auto key = cache_key(client_id, id);
-        bump_epoch(key);
-        if (!cache_->invalidate(key))
+        if (!cache_->invalidate_versioned(key))
         {
             LOG_WARN << "update committed for " << id
                      << " but cache eviction failed; stale until TTL";
@@ -132,8 +82,7 @@ namespace corvus::resources
             throw ResourceNotFound("Resource not found: " + id);
 
         const auto key = cache_key(client_id, id);
-        bump_epoch(key);
-        if (!cache_->invalidate(key))
+        if (!cache_->invalidate_versioned(key))
         {
             LOG_WARN << "delete committed for " << id
                      << " but cache eviction failed; stale until TTL";
