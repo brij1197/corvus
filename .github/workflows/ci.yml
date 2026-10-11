@@ -232,11 +232,7 @@ jobs:
           cat > docker-compose.override.yml <<'EOF'
           services:
             corvus-core:
-              build:
-                cache_from:
-                  - type=local,src=/tmp/.buildx-cache
-                cache_to:
-                  - type=local,dest=/tmp/.buildx-cache-new,mode=max
+              image: corvus-core:ci
             postgres:
               ports:
                 - "127.0.0.1:5433:5432"
@@ -246,8 +242,18 @@ jobs:
           EOF
           cat docker-compose.override.yml
 
+      - name: Build corvus-core image
+        run: |
+          docker buildx build --load \
+            -f deploy/docker/Dockerfile \
+            --build-arg BUILD_TARGET=corvus-core \
+            --cache-from type=local,src=/tmp/.buildx-cache \
+            --cache-to type=local,dest=/tmp/.buildx-cache-new,mode=max \
+            -t corvus-core:ci \
+            .
+
       - name: Start stack
-        run: docker compose up -d --build
+        run: docker compose up -d --no-build
         env:
           POSTGRES_PASSWORD: corvus_ci
           GRAFANA_PASSWORD: admin
