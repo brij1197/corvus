@@ -1,5 +1,6 @@
 #include "corvus/auth/middleware.h"
 #include "corvus/auth/authenticator.h"
+#include "corvus/auth/api_key_validator.h"
 #include "corvus/auth/client_context.h"
 #include "corvus/api/response.h"
 #include "corvus/api/request_id.h"
