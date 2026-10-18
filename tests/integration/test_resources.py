@@ -1,6 +1,8 @@
 import time
 import pytest
 
+from conftest import make_jwt
+
 RESOURCES = "/v1/resources"
 
 
@@ -440,23 +442,37 @@ class TestResourceAuth:
     def test_no_credentials_returns_401(self, api, path):
         assert api.get(path).status_code == 401
 
-    def test_jwt_without_api_key_returns_401(self, api, tenant):
-        resp = api.get(RESOURCES, headers={"Authorization": f"Bearer {tenant.jwt}"})
-        assert resp.status_code == 401
+    def test_api_key_alone_is_enough(self, api, tenant):
+        assert api.get(RESOURCES, headers=tenant.key_headers).status_code == 200
 
-    def test_api_key_without_jwt_returns_401(self, api, tenant):
-        resp = api.get(RESOURCES, headers={"X-Api-Key": tenant.api_key})
-        assert resp.status_code == 401
+    def test_client_bound_jwt_alone_is_enough(self, api, tenant):
+        assert api.get(RESOURCES, headers=tenant.jwt_headers).status_code == 200
 
-    def test_unknown_api_key_returns_401(self, api, tenant):
-        resp = api.get(
-            RESOURCES,
-            headers={
-                "Authorization": f"Bearer {tenant.jwt}",
-                "X-Api-Key": "no-such-key",
-            },
+    def test_jwt_alone_sees_only_its_own_tenant(self, api, tenant, other_tenant):
+        created = create_resource(api, other_tenant, name="jwt-isolation")
+        resp = api.get(f"{RESOURCES}/{created['id']}", headers=tenant.jwt_headers)
+        assert resp.status_code == 404
+
+    def test_unknown_api_key_returns_401_even_with_valid_jwt(self, api, tenant):
+        headers = {**tenant.jwt_headers, "X-Api-Key": "no-such-key"}
+        assert api.get(RESOURCES, headers=headers).status_code == 401
+
+    def test_key_and_jwt_for_different_tenants_returns_401(
+        self, api, tenant, other_tenant
+    ):
+        headers = {**tenant.key_headers, **other_tenant.jwt_headers}
+        assert api.get(RESOURCES, headers=headers).status_code == 401
+
+    def test_read_only_jwt_cannot_create(self, api, tenant):
+        token = make_jwt(client_id=tenant.client_id, scope="read")
+        headers = {"Authorization": f"Bearer {token}"}
+
+        assert api.get(RESOURCES, headers=headers).status_code == 200
+        resp = api.post(
+            RESOURCES, headers=headers, json={"kind": "server", "name": "nope"}
         )
-        assert resp.status_code == 401
+        assert resp.status_code == 403
+        assert resp.json()["error"]["code"] == "FORBIDDEN"
 
 
 def test_full_crud_lifecycle(api, tenant):

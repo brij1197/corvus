@@ -88,14 +88,33 @@ class TestJwtInvalidToken:
 
 
 class TestJwtValidToken:
-    def test_valid_token_passes_jwt_check(self, client, valid_jwt):
-        """With valid JWT, auth passes."""
+    def test_token_without_client_id_returns_401(self, client, valid_jwt):
+        """A token that names no client authorizes nothing."""
         resp = client.get(
             "/v1/anything", headers={"Authorization": f"Bearer {valid_jwt}"}
         )
         assert resp.status_code == 401
-        body = resp.json()
-        assert "X-Api-Key" in body["error"]["message"]
+        assert "client_id" in resp.json()["error"]["message"]
+
+    def test_client_bound_token_passes_auth(self, client):
+        token = make_jwt(client_id="jwt-only-client", scope="read")
+        resp = client.get("/v1/anything", headers={"Authorization": f"Bearer {token}"})
+        # Auth passes; the route itself doesn't exist.
+        assert resp.status_code == 404
+        assert resp.json()["error"]["code"] == "NOT_FOUND"
+
+    def test_token_without_write_scope_cannot_write(self, client):
+        token = make_jwt(client_id="jwt-only-client", scope="read")
+        resp = client.post(
+            "/v1/anything", headers={"Authorization": f"Bearer {token}"}, json={}
+        )
+        assert resp.status_code == 403
+        assert resp.json()["error"]["code"] == "FORBIDDEN"
+
+    def test_token_with_no_scope_cannot_read(self, client):
+        token = make_jwt(client_id="jwt-only-client")
+        resp = client.get("/v1/anything", headers={"Authorization": f"Bearer {token}"})
+        assert resp.status_code == 403
 
     def test_valid_token_not_rate_limited_on_health(self, client, valid_jwt):
         """Health endpoint ignores JWT entirely."""

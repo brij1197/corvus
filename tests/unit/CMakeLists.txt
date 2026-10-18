@@ -12,6 +12,7 @@ add_executable(corvus-unit-tests
   test_envelope.cpp
   test_jwt_validator.cpp
   test_api_key_validator.cpp
+  test_authenticator.cpp
   test_rate_limiter.cpp
   test_request_size_limit.cpp
   test_request_id.cpp
@@ -57,6 +58,7 @@ gtest_add_tests(
               test_envelope.cpp
               test_jwt_validator.cpp
               test_api_key_validator.cpp
+              test_authenticator.cpp
               test_rate_limiter.cpp
               test_request_size_limit.cpp
               test_request_id.cpp

@@ -6,7 +6,6 @@
 #include "corvus/gateway/request_id_middleware.h"
 #include "corvus/auth/middleware.h"
 #include "corvus/auth/jwt_validator.h"
-#include "corvus/auth/api_key_middleware.h"
 #include "corvus/auth/api_key_validator.h"
 #include "corvus/db/pg_pool.h"
 #include "corvus/db/redis_connection.h"
@@ -154,8 +153,7 @@ int main(int argc, char *argv[])
     corvus::gateway::register_rate_limit_middleware(rate_limiter);
 
     // Register auth middleware (runs before route handlers)
-    corvus::auth::register_jwt_middleware(jwt_validator);
-    corvus::auth::register_api_key_middleware(api_key_validator);
+    corvus::auth::register_auth_middleware(jwt_validator, api_key_validator);
 
     LOG_INFO << "Corvus " << corvus::version::string() << " starting";
 

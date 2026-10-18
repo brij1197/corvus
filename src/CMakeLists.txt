@@ -68,7 +68,7 @@ add_library(corvus-auth STATIC
   auth/jwt_validator.cpp
   auth/middleware.cpp
   auth/api_key_validator.cpp
-  auth/api_key_middleware.cpp
+  auth/authenticator.cpp
   auth/client_context.cpp
 )
 
