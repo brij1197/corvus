@@ -23,6 +23,8 @@ namespace corvus::auth
     {
         std::string subject;
         std::string issuer;
+        std::optional<std::string> client_id; // custom claim binding the token to a tenant
+        std::string scope;                    // OAuth2-style, space-separated
     };
 
     /// Loads an RS256 public key from the environment and validates JWT Bearer tokens

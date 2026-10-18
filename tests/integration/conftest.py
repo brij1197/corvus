@@ -51,8 +51,14 @@ def make_jwt(
     expires_in: int = 300,
     private_key: str | None = None,
     algorithm: str = "RS256",
+    client_id: str | None = None,
+    scope: str | None = None,
 ) -> str:
-    """Sign a JWT with the test private key."""
+    """Sign a JWT with the test private key.
+
+    Only a token carrying ``client_id`` authenticates on its own; ``scope``
+    is space-separated, OAuth2 style ("read write").
+    """
     if pyjwt is None:
         raise RuntimeError("PyJWT not installed")
 
@@ -67,6 +73,10 @@ def make_jwt(
         "iat": now,
         "exp": now + timedelta(seconds=expires_in),
     }
+    if client_id is not None:
+        payload["client_id"] = client_id
+    if scope is not None:
+        payload["scope"] = scope
     return pyjwt.encode(payload, key, algorithm=algorithm)
 
 
@@ -189,11 +199,19 @@ class Tenant:
 
     @property
     def headers(self) -> dict:
-        """Both credentials: every /v1/* route requires JWT *and* API key."""
+        """Both credentials, bound to the same client. Either alone also works."""
         return {
             "Authorization": f"Bearer {self.jwt}",
             "X-Api-Key": self.api_key,
         }
+
+    @property
+    def key_headers(self) -> dict:
+        return {"X-Api-Key": self.api_key}
+
+    @property
+    def jwt_headers(self) -> dict:
+        return {"Authorization": f"Bearer {self.jwt}"}
 
 
 def _make_tenant(pg_conn, redis, label: str) -> Tenant:
@@ -215,7 +233,11 @@ def _make_tenant(pg_conn, redis, label: str) -> Tenant:
         redis_key(raw_key),
         mapping={"client_id": client_id, "scopes": "read,write"},
     )
-    return Tenant(client_id, raw_key, make_jwt(subject=f"itest-{label}"))
+    return Tenant(
+        client_id,
+        raw_key,
+        make_jwt(subject=f"itest-{label}", client_id=client_id, scope="read write"),
+    )
 
 
 def _drop_tenant(pg_conn, redis, tenant: Tenant) -> None:

@@ -64,6 +64,14 @@ namespace corvus::auth
             {
                 claims.issuer = decoded.get_issuer();
             }
+            if (decoded.has_payload_claim("client_id"))
+            {
+                claims.client_id = decoded.get_payload_claim("client_id").as_string();
+            }
+            if (decoded.has_payload_claim("scope"))
+            {
+                claims.scope = decoded.get_payload_claim("scope").as_string();
+            }
             return claims;
         }
         catch (const JwtValidationError &)

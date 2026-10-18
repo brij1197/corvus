@@ -141,3 +141,39 @@ TEST(JwtValidatorEnvTest, LoadsKeyFromEnvVar)
     EXPECT_NO_THROW(corvus::auth::JwtValidator());
     unsetenv("CORVUS_JWT_PUBLIC_KEY");
 }
+TEST_F(JwtValidatorTest, ExtractsClientIdAndScope)
+{
+    auto now = std::chrono::system_clock::now();
+    const auto token = jwt::create<jwt_traits>()
+                           .set_type("JWT")
+                           .set_subject("svc")
+                           .set_expires_at(now + std::chrono::minutes(5))
+                           .set_payload_claim("client_id", jwt::basic_claim<jwt_traits>(std::string("client-123")))
+                           .set_payload_claim("scope", jwt::basic_claim<jwt_traits>(std::string("read write")))
+                           .sign(jwt::algorithm::rs256{public_key_, private_key_});
+
+    const auto claims = corvus::auth::JwtValidator{public_key_}.validate(token);
+    ASSERT_TRUE(claims.client_id.has_value());
+    EXPECT_EQ(*claims.client_id, "client-123");
+    EXPECT_EQ(claims.scope, "read write");
+}
+
+TEST_F(JwtValidatorTest, TokenWithoutClientIdHasNoClientId)
+{
+    const auto claims = corvus::auth::JwtValidator{public_key_}.validate(make_token("alice"));
+    EXPECT_FALSE(claims.client_id.has_value());
+    EXPECT_TRUE(claims.scope.empty());
+}
+
+TEST_F(JwtValidatorTest, NonStringClientIdIsRejected)
+{
+    auto now = std::chrono::system_clock::now();
+    const auto token = jwt::create<jwt_traits>()
+                           .set_type("JWT")
+                           .set_expires_at(now + std::chrono::minutes(5))
+                           .set_payload_claim("client_id", jwt::basic_claim<jwt_traits>(nlohmann::json(42)))
+                           .sign(jwt::algorithm::rs256{public_key_, private_key_});
+
+    EXPECT_THROW(corvus::auth::JwtValidator{public_key_}.validate(token),
+                 corvus::auth::JwtValidationError);
+}
