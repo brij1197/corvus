@@ -33,6 +33,7 @@ target_include_directories(corvus-db PUBLIC
 target_link_libraries(corvus-db PUBLIC
   ${LIBPQXX_LIBRARIES}
   hiredis::hiredis
+  Drogon::Drogon
 )
 
 target_compile_features(corvus-db PUBLIC cxx_std_20)
@@ -68,6 +69,7 @@ add_library(corvus-auth STATIC
   auth/jwt_validator.cpp
   auth/middleware.cpp
   auth/api_key_validator.cpp
+  auth/pg_api_key_lookup.cpp
   auth/authenticator.cpp
   auth/client_context.cpp
 )

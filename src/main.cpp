@@ -7,6 +7,7 @@
 #include "corvus/auth/middleware.h"
 #include "corvus/auth/jwt_validator.h"
 #include "corvus/auth/api_key_validator.h"
+#include "corvus/auth/pg_api_key_lookup.h"
 #include "corvus/db/pg_pool.h"
 #include "corvus/db/redis_connection.h"
 #include "corvus/db/cache_aside.h"
@@ -95,6 +96,8 @@ int main(int argc, char *argv[])
         std::cerr << "FATAL: PostgreSQL unavailable: " << e.what() << "\n";
         return 1;
     }
+
+    api_key_validator->set_lookup(corvus::auth::make_pg_api_key_lookup(pg_pool));
 
     if (env_flag("CORVUS_RUN_MIGRATIONS", true))
     {

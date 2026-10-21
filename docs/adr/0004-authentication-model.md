@@ -39,6 +39,18 @@ Rules:
   issuer with `client_id` and `scope` claims.
 - Clients that sent both credentials keep working, provided the token now
   carries the matching `client_id`.
-- Not yet covered: API key `is_active` and `expires_at` live in Postgres and
-  are not checked; revocation is by deleting the Redis entry. That is the next
-  change.
+
+## Addendum: where API keys live (2026-10-18)
+
+Postgres `api_keys` is the source of truth. Redis caches validated keys:
+
+- On a cache miss the key is looked up by hash, and only rows that are
+  `is_active` and not past `expires_at` count. A hit is cached for at most 60 s,
+  and never past the key's own expiry.
+- Revoking a key (`is_active = false`) or letting it expire takes effect within
+  that TTL, with no Redis cleanup needed.
+- Cache entries carry a `src=pg` marker; entries without it (seeded by hand or
+  left over) are ignored, so Redis can't authenticate a key Postgres doesn't know.
+- If Redis fails, keys are checked against Postgres directly. Only a Postgres
+  failure returns 503.
+- Redis connections are pooled (up to 8 idle) instead of opened per request.

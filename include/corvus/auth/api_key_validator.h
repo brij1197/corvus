@@ -1,8 +1,13 @@
 #pragma once
 #include "corvus/db/redis_connection.h"
-#include <string>
-#include <stdexcept>
+#include <chrono>
+#include <functional>
 #include <memory>
+#include <mutex>
+#include <optional>
+#include <stdexcept>
+#include <string>
+#include <vector>
 
 namespace corvus::auth
 {
@@ -28,12 +33,23 @@ namespace corvus::auth
         std::string scopes;
     };
 
+    struct ApiKeyRecord
+    {
+        std::string client_id;
+        std::string scopes;
+        std::optional<std::chrono::system_clock::time_point> expires_at;
+    };
+
+    using ApiKeyLookup = std::function<std::optional<ApiKeyRecord>(const std::string &key_hash)>;
+
     class ApiKeyValidator
     {
     public:
+        static constexpr std::chrono::seconds kCacheTtl{60};
+
         ApiKeyValidator();
 
-        explicit ApiKeyValidator(db::RedisConfig config);
+        explicit ApiKeyValidator(db::RedisConfig config, ApiKeyLookup lookup = nullptr);
 
         ApiKeyValidator(const std::string &host, int port);
 
@@ -45,9 +61,24 @@ namespace corvus::auth
 
         const db::RedisConfig &config() const noexcept { return config_; }
 
+        std::size_t idle_connections() const;
+
+        void set_lookup(ApiKeyLookup lookup) { lookup_ = std::move(lookup); }
+
     private:
+        static constexpr std::size_t kMaxIdleConnections = 8;
+
         db::RedisConfig config_;
-        db::RedisConnection connect() const;
+        ApiKeyLookup lookup_;
+
+        mutable std::mutex idle_mutex_;
+        mutable std::vector<std::unique_ptr<db::RedisConnection>> idle_;
+
+        std::unique_ptr<db::RedisConnection> acquire() const;
+        void release(std::unique_ptr<db::RedisConnection> conn) const;
+
+        std::optional<ApiKeyInfo> from_cache(const std::string &rkey) const;
+        void store_in_cache(const std::string &rkey, const ApiKeyRecord &record) const;
     };
 
 } // namespace corvus::auth

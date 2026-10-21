@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 
 import pytest
+from conftest import sha256_hex
 
 RESOURCES = "/v1/resources"
 
@@ -206,23 +207,21 @@ def redis_denies_all_keys(redis):
         redis.execute_command("ACL", "SETUSER", "default", "allkeys")
 
 
-class TestAuthBackendUnavailable:
+class TestAuthWhenRedisFails:
     """
-    API keys live in Redis. When Redis can't answer, the key may be perfectly
-    valid, so the API must say "try again" (503), not "your key is bad" (401).
+    Postgres is the source of truth for API keys; Redis only caches them.
+    Losing Redis must not lock anyone out.
     """
 
-    def test_returns_503_not_401_when_key_lookup_fails(self, api, tenant, redis):
+    def test_key_still_authenticates_when_redis_fails(self, api, tenant, redis):
         resource = create_resource(api, tenant, "auth-down")
+        redis.delete(f"corvus:apikeys:{sha256_hex(tenant.api_key)}")
 
         with redis_denies_all_keys(redis):
-            resp = api.get(url_for(resource), headers=tenant.headers)
+            resp = api.get(url_for(resource), headers=tenant.key_headers)
 
-        assert resp.status_code == 503, resp.text
-        body = resp.json()
-        assert body["error"]["code"] == "SERVICE_UNAVAILABLE"
-        assert body["data"] is None
-        assert int(resp.headers["retry-after"]) > 0
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["data"]["id"] == resource["id"]
 
     def test_unknown_key_is_still_401_when_redis_is_healthy(self, api, tenant):
         headers = {**tenant.headers, "X-Api-Key": "itest-never-issued"}
@@ -231,11 +230,7 @@ class TestAuthBackendUnavailable:
         assert resp.status_code == 401
         assert resp.json()["error"]["code"] == "UNAUTHORIZED"
 
-    def test_same_key_works_again_once_redis_recovers(self, api, tenant, redis):
-        resource = create_resource(api, tenant, "auth-recover")
-
+    def test_unknown_key_is_still_401_when_redis_fails(self, api, redis):
         with redis_denies_all_keys(redis):
-            assert api.get(url_for(resource), headers=tenant.headers).status_code == 503
-
-        resp = api.get(url_for(resource), headers=tenant.headers)
-        assert resp.status_code == 200, resp.text
+            resp = api.get(RESOURCES, headers={"X-Api-Key": "itest-never-issued"})
+        assert resp.status_code == 401
