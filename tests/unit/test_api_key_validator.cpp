@@ -4,6 +4,11 @@
 #include <cstdlib>
 #include <string>
 #include <type_traits>
+#include <atomic>
+#include <chrono>
+#include <thread>
+#include <unordered_map>
+#include <vector>
 
 static std::string redis_host()
 {
@@ -215,6 +220,21 @@ namespace
         return cfg;
     }
 
+    redisReply *run_authed(const std::string &password, const char *cmd)
+    {
+        redisContext *c = redisConnect(redis_host().c_str(), redis_port());
+        redisReply *r = nullptr;
+        if (c && !c->err)
+        {
+            if (auto *a = static_cast<redisReply *>(redisCommand(c, "AUTH %s", password.c_str())))
+                freeReplyObject(a);
+            r = static_cast<redisReply *>(redisCommand(c, cmd));
+        }
+        if (c)
+            redisFree(c);
+        return r;
+    }
+
     class RequirePassword
     {
     public:
@@ -284,6 +304,9 @@ TEST_F(ApiKeyValidatorTest, MissingPasswordIsABackendErrorNotARejection)
     if (!guard.active())
         GTEST_SKIP() << "could not enable requirepass on the test Redis";
 
+    if (auto *r = run_authed("corvus-unit-test-pw", "CLIENT KILL TYPE normal SKIPME no"))
+        freeReplyObject(r);
+
     EXPECT_THROW(without_pw.validate(raw), corvus::auth::ApiKeyBackendError);
 }
 
@@ -309,4 +332,192 @@ TEST(ApiKeyValidatorEnvTest, DefaultConstructorUsesSharedRedisEnv)
 
     EXPECT_EQ(v.config().db, 7);
     EXPECT_EQ(v.config().host, corvus::db::redis_config_from_env().host);
+}
+
+namespace
+{
+    long long redis_ttl(const std::string &key)
+    {
+        redisContext *c = redisConnect(redis_host().c_str(), redis_port());
+        long long ttl = -3;
+        if (c && !c->err)
+            if (auto *r = static_cast<redisReply *>(redisCommand(c, "TTL %s", key.c_str())))
+            {
+                ttl = r->integer;
+                freeReplyObject(r);
+            }
+        if (c)
+            redisFree(c);
+        return ttl;
+    }
+
+    void redis_del(const std::string &key)
+    {
+        if (auto *r = run(("DEL " + key).c_str()))
+            freeReplyObject(r);
+    }
+
+    std::string cache_key_for(const std::string &raw)
+    {
+        return "corvus:apikeys:" + corvus::auth::ApiKeyValidator::hash_key(raw);
+    }
+
+    struct FakeKeyStore
+    {
+        std::unordered_map<std::string, corvus::auth::ApiKeyRecord> rows;
+        std::atomic<int> calls{0};
+        bool down{false};
+
+        corvus::auth::ApiKeyLookup lookup()
+        {
+            return [this](const std::string &hash) -> std::optional<corvus::auth::ApiKeyRecord>
+            {
+                ++calls;
+                if (down)
+                    throw corvus::auth::ApiKeyBackendError("db down");
+                const auto it = rows.find(hash);
+                if (it == rows.end())
+                    return std::nullopt;
+                return it->second;
+            };
+        }
+
+        void add(const std::string &raw, corvus::auth::ApiKeyRecord rec)
+        {
+            rows[corvus::auth::ApiKeyValidator::hash_key(raw)] = std::move(rec);
+        }
+    };
+
+    std::string unique_raw(const char *tag)
+    {
+        return std::string("pg-mode-") + tag + "-" +
+               std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+    }
+} // namespace
+
+TEST_F(ApiKeyValidatorTest, KeyKnownOnlyToPostgresValidatesAndIsCached)
+{
+    FakeKeyStore db;
+    const auto raw = unique_raw("dbonly");
+    db.add(raw, {"client-pg", "read write", std::nullopt});
+    corvus::auth::ApiKeyValidator v(local_config(), db.lookup());
+
+    EXPECT_EQ(v.validate(raw).client_id, "client-pg");
+    EXPECT_EQ(db.calls, 1);
+
+    const auto ttl = redis_ttl(cache_key_for(raw));
+    EXPECT_GT(ttl, 0);
+    EXPECT_LE(ttl, corvus::auth::ApiKeyValidator::kCacheTtl.count());
+
+    EXPECT_EQ(v.validate(raw).scopes, "read write");
+    EXPECT_EQ(db.calls, 1) << "second call should be served from the cache";
+    redis_del(cache_key_for(raw));
+}
+
+TEST_F(ApiKeyValidatorTest, KeyUnknownToPostgresIsRejected)
+{
+    FakeKeyStore db;
+    corvus::auth::ApiKeyValidator v(local_config(), db.lookup());
+    EXPECT_THROW(v.validate(unique_raw("unknown")), corvus::auth::ApiKeyValidationError);
+}
+
+TEST_F(ApiKeyValidatorTest, RevocationTakesEffectOnceTheCacheEntryExpires)
+{
+    FakeKeyStore db;
+    const auto raw = unique_raw("revoke");
+    db.add(raw, {"client-pg", "read", std::nullopt});
+    corvus::auth::ApiKeyValidator v(local_config(), db.lookup());
+    ASSERT_NO_THROW(v.validate(raw));
+
+    db.rows.clear();
+    redis_del(cache_key_for(raw));
+
+    EXPECT_THROW(v.validate(raw), corvus::auth::ApiKeyValidationError);
+}
+
+TEST_F(ApiKeyValidatorTest, CacheNeverOutlivesTheKeysExpiry)
+{
+    FakeKeyStore db;
+    const auto raw = unique_raw("expiring");
+    db.add(raw, {"client-pg", "read", std::chrono::system_clock::now() + std::chrono::seconds(5)});
+    corvus::auth::ApiKeyValidator v(local_config(), db.lookup());
+
+    ASSERT_NO_THROW(v.validate(raw));
+    EXPECT_LE(redis_ttl(cache_key_for(raw)), 5);
+    redis_del(cache_key_for(raw));
+}
+
+TEST_F(ApiKeyValidatorTest, HandWrittenRedisEntryCannotBypassPostgres)
+{
+    FakeKeyStore db;
+    const std::string raw = seed_key("svc-handwritten");
+    corvus::auth::ApiKeyValidator v(local_config(), db.lookup());
+
+    EXPECT_THROW(v.validate(raw), corvus::auth::ApiKeyValidationError);
+    EXPECT_EQ(db.calls, 1);
+}
+
+TEST_F(ApiKeyValidatorTest, RedisOutageFallsBackToPostgres)
+{
+    FakeKeyStore db;
+    const auto raw = unique_raw("redis-down");
+    db.add(raw, {"client-pg", "read", std::nullopt});
+    corvus::auth::ApiKeyValidator v(local_config(), db.lookup());
+
+    DenyAllKeys deny;
+    if (!deny.active())
+        GTEST_SKIP() << "Redis ACLs unavailable (needs Redis 6+)";
+
+    EXPECT_EQ(v.validate(raw).client_id, "client-pg");
+}
+
+TEST_F(ApiKeyValidatorTest, PostgresOutageIsABackendError)
+{
+    FakeKeyStore db;
+    db.down = true;
+    corvus::auth::ApiKeyValidator v(local_config(), db.lookup());
+    EXPECT_THROW(v.validate(unique_raw("db-down")), corvus::auth::ApiKeyBackendError);
+}
+
+TEST_F(ApiKeyValidatorTest, ReusesRedisConnections)
+{
+    const std::string raw = seed_key("svc-reuse");
+    corvus::auth::ApiKeyValidator v(local_config());
+
+    for (int i = 0; i < 20; ++i)
+        ASSERT_NO_THROW(v.validate(raw));
+
+    EXPECT_EQ(v.idle_connections(), 1u) << "sequential calls should share one connection";
+}
+
+TEST_F(ApiKeyValidatorTest, ConcurrentValidationsAreSafe)
+{
+    const std::string raw = seed_key("svc-concurrent");
+    corvus::auth::ApiKeyValidator v(local_config());
+
+    std::atomic<int> failures{0};
+    std::vector<std::thread> threads;
+    for (int t = 0; t < 8; ++t)
+        threads.emplace_back([&]
+                             {
+            for (int i = 0; i < 50; ++i)
+                try { if (v.validate(raw).client_id != "svc-concurrent") ++failures; }
+                catch (...) { ++failures; } });
+    for (auto &t : threads)
+        t.join();
+
+    EXPECT_EQ(failures, 0);
+    EXPECT_LE(v.idle_connections(), 8u);
+}
+
+TEST_F(ApiKeyValidatorTest, RecoversWhenParkedConnectionsDie)
+{
+    const std::string raw = seed_key("svc-restart");
+    corvus::auth::ApiKeyValidator v(local_config());
+    ASSERT_NO_THROW(v.validate(raw));
+
+    if (auto *r = run("CLIENT KILL TYPE normal SKIPME no"))
+        freeReplyObject(r);
+
+    EXPECT_EQ(v.validate(raw).client_id, "svc-restart");
 }

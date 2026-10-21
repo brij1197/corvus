@@ -179,16 +179,6 @@ def expired_jwt() -> str:
     return make_expired_jwt()
 
 
-@pytest.fixture
-def api_key(redis) -> str:
-    """Register a fresh API key in Redis and clean it up after the test."""
-    raw_key = f"test-key-{time.time_ns()}"
-    rkey = redis_key(raw_key)
-    redis.hset(rkey, mapping={"client_id": "test-client", "scopes": "read"})
-    yield raw_key
-    redis.delete(rkey)
-
-
 class Tenant:
     """A real client row plus credentials that authenticate as it."""
 
@@ -214,7 +204,7 @@ class Tenant:
         return {"Authorization": f"Bearer {self.jwt}"}
 
 
-def _make_tenant(pg_conn, redis, label: str) -> Tenant:
+def _make_tenant(pg_conn, redis, label: str, scopes: str = "read,write") -> Tenant:
     cur = pg_conn.cursor()
     cur.execute(
         "INSERT INTO clients (name) VALUES (%s) RETURNING id",
@@ -225,18 +215,15 @@ def _make_tenant(pg_conn, redis, label: str) -> Tenant:
     raw_key = f"itest-{label}-key-{time.time_ns()}"
     cur.execute(
         "INSERT INTO api_keys (client_id, key_hash, scopes) VALUES (%s, %s, %s)",
-        (client_id, sha256_hex(raw_key), "read,write"),
+        (client_id, sha256_hex(raw_key), scopes),
     )
     cur.close()
 
-    redis.hset(
-        redis_key(raw_key),
-        mapping={"client_id": client_id, "scopes": "read,write"},
-    )
+    jwt_scope = " ".join(s for s in scopes.split(",") if s)
     return Tenant(
         client_id,
         raw_key,
-        make_jwt(subject=f"itest-{label}", client_id=client_id, scope="read write"),
+        make_jwt(subject=f"itest-{label}", client_id=client_id, scope=jwt_scope),
     )
 
 
@@ -254,6 +241,14 @@ def _drop_tenant(pg_conn, redis, tenant: Tenant) -> None:
 def tenant(pg_conn, redis) -> Tenant:
     """An isolated tenant: clients row, API key in Postgres and Redis, JWT."""
     t = _make_tenant(pg_conn, redis, "a")
+    yield t
+    _drop_tenant(pg_conn, redis, t)
+
+
+@pytest.fixture
+def reader(pg_conn, redis) -> Tenant:
+    """A tenant whose key and token grant only the "read" scope."""
+    t = _make_tenant(pg_conn, redis, "r", scopes="read")
     yield t
     _drop_tenant(pg_conn, redis, t)
 

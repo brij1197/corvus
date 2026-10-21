@@ -13,6 +13,7 @@ add_executable(corvus-unit-tests
   test_jwt_validator.cpp
   test_api_key_validator.cpp
   test_authenticator.cpp
+  test_pg_api_key_lookup.cpp
   test_rate_limiter.cpp
   test_request_size_limit.cpp
   test_request_id.cpp
@@ -59,6 +60,7 @@ gtest_add_tests(
               test_jwt_validator.cpp
               test_api_key_validator.cpp
               test_authenticator.cpp
+              test_pg_api_key_lookup.cpp
               test_rate_limiter.cpp
               test_request_size_limit.cpp
               test_request_id.cpp
@@ -81,5 +83,7 @@ set_tests_properties(
   ApiKeyValidatorTest.AuthenticatesWithTheConfiguredPassword
   ApiKeyValidatorTest.MissingPasswordIsABackendErrorNotARejection
   ApiKeyValidatorTest.WrongPasswordFailsAtStartup
+  ApiKeyValidatorTest.RedisOutageFallsBackToPostgres
+  ApiKeyValidatorTest.RecoversWhenParkedConnectionsDie
   PROPERTIES RUN_SERIAL TRUE
 )
