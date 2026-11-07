@@ -2,6 +2,7 @@
 #include "corvus/gateway/health_handler.h"
 #include "corvus/gateway/readiness_handler.h"
 #include "corvus/gateway/not_found_handler.h"
+#include "corvus/gateway/offload.h"
 #include "corvus/api/response.h"
 #include "corvus/api/request_id.h"
 #include <drogon/drogon.h>
@@ -23,14 +24,19 @@ namespace corvus::gateway
     }
 
     void register_readiness_route(std::shared_ptr<db::PgPool> pool,
-                                  db::RedisConfig redis_config)
+                                  db::RedisConfig redis_config,
+                                  std::shared_ptr<BlockingExecutor> executor)
     {
         auto r = readiness_handler(std::move(pool), std::move(redis_config));
         drogon::app().registerHandler(
             "/ready",
-            [r](const drogon::HttpRequestPtr &req,
-                std::function<void(const drogon::HttpResponsePtr &)> &&cb)
-            { r(req, std::move(cb)); },
+            [r, executor](const drogon::HttpRequestPtr &req,
+                          std::function<void(const drogon::HttpResponsePtr &)> &&cb)
+            {
+                offload(executor, req, std::move(cb),
+                        [r, req](ResponseCallback reply)
+                        { r(req, std::move(reply)); });
+            },
             {drogon::Get});
 
         LOG_INFO << "Readiness route registered";
@@ -46,28 +52,28 @@ namespace corvus::gateway
         drogon::app().registerHandler(
             "/{a}",
             [nf](const drogon::HttpRequestPtr &req,
-                std::function<void(const drogon::HttpResponsePtr &)> &&cb)
+                 std::function<void(const drogon::HttpResponsePtr &)> &&cb)
             { nf(req, std::move(cb)); },
             all_methods);
 
         drogon::app().registerHandler(
             "/{a}/{b}",
             [nf](const drogon::HttpRequestPtr &req,
-                std::function<void(const drogon::HttpResponsePtr &)> &&cb)
+                 std::function<void(const drogon::HttpResponsePtr &)> &&cb)
             { nf(req, std::move(cb)); },
             all_methods);
 
         drogon::app().registerHandler(
             "/{a}/{b}/{c}",
             [nf](const drogon::HttpRequestPtr &req,
-                std::function<void(const drogon::HttpResponsePtr &)> &&cb)
+                 std::function<void(const drogon::HttpResponsePtr &)> &&cb)
             { nf(req, std::move(cb)); },
             all_methods);
 
         drogon::app().registerHandler(
             "/{a}/{b}/{c}/{d}",
             [nf](const drogon::HttpRequestPtr &req,
-                std::function<void(const drogon::HttpResponsePtr &)> &&cb)
+                 std::function<void(const drogon::HttpResponsePtr &)> &&cb)
             { nf(req, std::move(cb)); },
             all_methods);
 

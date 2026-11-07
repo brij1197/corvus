@@ -1,5 +1,6 @@
 #include <drogon/drogon.h>
 #include "corvus/gateway/router.h"
+#include "corvus/gateway/blocking_executor.h"
 #include "corvus/gateway/health_probe.h"
 #include "corvus/gateway/rate_limiter.h"
 #include "corvus/gateway/request_size_limit.h"
@@ -27,6 +28,13 @@
 namespace
 {
     constexpr int kListenPort = 8080;
+    constexpr std::size_t kDbPoolSize = 10;
+    // Blocking work mostly waits on a Postgres connection, so more workers
+    // than connections would only queue on the pool instead of here.
+    constexpr std::size_t kWorkerThreads = kDbPoolSize;
+    // Beyond this many waiting requests, shed load with 503 rather than let
+    // latency grow without bound.
+    constexpr std::size_t kMaxQueuedRequests = 256;
 
     std::string env_or(const char *var, const char *fallback)
     {
@@ -85,7 +93,7 @@ int main(int argc, char *argv[])
         pool_config.connection_string =
             corvus::db::connection_string_from_env();
         pool_config.min_connections = 2;
-        pool_config.max_connections = 10;
+        pool_config.max_connections = kDbPoolSize;
 
         pg_pool = std::make_shared<corvus::db::PgPool>(pool_config);
         LOG_INFO << "PostgreSQL pool ready (" << pg_pool->size()
@@ -149,6 +157,9 @@ int main(int argc, char *argv[])
         std::make_shared<corvus::resources::ResourceService>(
             resource_repository, cache);
 
+    auto executor = std::make_shared<corvus::gateway::BlockingExecutor>(
+        kWorkerThreads, kMaxQueuedRequests);
+
     corvus::gateway::register_request_id_middleware();
     corvus::gateway::register_request_size_limit_middleware();
 
@@ -156,15 +167,15 @@ int main(int argc, char *argv[])
     corvus::gateway::register_rate_limit_middleware(rate_limiter);
 
     // Register auth middleware (runs before route handlers)
-    corvus::auth::register_auth_middleware(jwt_validator, api_key_validator);
+    corvus::auth::register_auth_middleware(jwt_validator, api_key_validator, executor);
 
     LOG_INFO << "Corvus " << corvus::version::string() << " starting";
 
     // Register routes
     corvus::gateway::register_routes();
     corvus::gateway::register_readiness_route(
-        pg_pool, corvus::db::redis_config_from_env());
-    corvus::resources::register_resource_routes(resource_service);
+        pg_pool, corvus::db::redis_config_from_env(), executor);
+    corvus::resources::register_resource_routes(resource_service, executor);
 
     corvus::gateway::register_catchall_routes();
 

@@ -42,6 +42,8 @@ add_library(corvus-gateway STATIC
   gateway/router.cpp
   gateway/health_handler.cpp
   gateway/health_probe.cpp
+  gateway/blocking_executor.cpp
+  gateway/offload.cpp
   gateway/readiness_handler.cpp
   gateway/not_found_handler.cpp
   gateway/rate_limiter.cpp
@@ -80,6 +82,7 @@ target_include_directories(corvus-auth PUBLIC
 
 target_link_libraries(corvus-auth PUBLIC
   corvus-api
+  corvus-gateway
   corvus-db
   Drogon::Drogon
   jwt-cpp::jwt-cpp
@@ -106,6 +109,7 @@ target_include_directories(corvus-resources PUBLIC
 
 target_link_libraries(corvus-resources PUBLIC
   nlohmann_json::nlohmann_json
+  corvus-gateway
   corvus-db
   corvus-auth
   Drogon::Drogon
