@@ -3,8 +3,10 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 
+import httpx
+import psycopg2
 import pytest
-from conftest import sha256_hex
+from conftest import DB_HOST, DB_NAME, DB_PASSWORD, DB_PORT, DB_USER, sha256_hex
 
 RESOURCES = "/v1/resources"
 
@@ -234,3 +236,63 @@ class TestAuthWhenRedisFails:
         with redis_denies_all_keys(redis):
             resp = api.get(RESOURCES, headers={"X-Api-Key": "itest-never-issued"})
         assert resp.status_code == 401
+
+
+@contextmanager
+def resources_table_locked():
+    """Hold an exclusive lock on `resources`, so every query on it waits."""
+    locker = psycopg2.connect(
+        host=DB_HOST, port=DB_PORT, dbname=DB_NAME, user=DB_USER, password=DB_PASSWORD
+    )
+    try:
+        cur = locker.cursor()
+        cur.execute("LOCK TABLE resources IN ACCESS EXCLUSIVE MODE")
+        yield
+    finally:
+        locker.rollback()
+        locker.close()
+
+
+class TestSlowDatabaseDoesNotFreezeServer:
+    """
+    Database calls are blocking. If they run on Drogon's few I/O threads, a
+    handful of slow queries stop the server from answering anything, /health
+    included. They must run on a separate worker pool.
+    """
+
+    def test_health_answers_while_queries_are_stuck(
+        self, api, client, tenant, pg_conn, full_rate_bucket
+    ):
+        api.get(RESOURCES, headers=tenant.headers)  # warm the key cache
+
+        # The pool must outlive the lock: its shutdown waits for the stuck
+        # requests, which only finish once the lock is released.
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            with resources_table_locked():
+                stuck = [
+                    pool.submit(
+                        client.get, RESOURCES, headers=tenant.headers, timeout=30
+                    )
+                    for _ in range(6)
+                ]
+                time.sleep(1.0)  # let all six reach the database and block
+
+                start = time.monotonic()
+                try:
+                    health = client.get("/health", timeout=3)
+                except httpx.TimeoutException:
+                    pytest.fail(
+                        "/health did not answer within 3s behind blocked queries"
+                    )
+                elapsed = time.monotonic() - start
+
+                assert health.status_code == 200
+                assert elapsed < 1.0, (
+                    f"/health took {elapsed:.2f}s behind blocked queries"
+                )
+                assert not any(f.done() for f in stuck), (
+                    "queries were not actually blocked"
+                )
+
+            # Lock released: the queued requests complete normally.
+            assert all(f.result().status_code == 200 for f in stuck)

@@ -1,56 +1,55 @@
 #include "corvus/resources/resource_routes.h"
+#include "corvus/gateway/offload.h"
 #include "corvus/resources/resource_handler.h"
 #include <drogon/drogon.h>
 
 namespace corvus::resources
 {
-    void register_resource_routes(std::shared_ptr<ResourceService> service)
+    namespace
     {
-        (void)service;
+        using gateway::ResponseCallback;
 
-        auto create = create_resource_handler(service);
+        auto on_worker(std::shared_ptr<gateway::BlockingExecutor> executor, ResourceHandler handler)
+        {
+            return [executor, handler](const drogon::HttpRequestPtr &req, ResponseCallback &&cb)
+            {
+                gateway::offload(executor, req, std::move(cb),
+                                 [handler, req](ResponseCallback reply)
+                                 { handler(req, std::move(reply)); });
+            };
+        }
+
+        auto on_worker(std::shared_ptr<gateway::BlockingExecutor> executor, ResourceIdHandler handler)
+        {
+            return [executor, handler](const drogon::HttpRequestPtr &req, ResponseCallback &&cb,
+                                       const std::string &id)
+            {
+                gateway::offload(executor, req, std::move(cb),
+                                 [handler, req, id](ResponseCallback reply)
+                                 { handler(req, std::move(reply), id); });
+            };
+        }
+    } // namespace
+
+    void register_resource_routes(std::shared_ptr<ResourceService> service,
+                                  std::shared_ptr<gateway::BlockingExecutor> executor)
+    {
         drogon::app().registerHandler(
-            "/v1/resources",
-            [create](const drogon::HttpRequestPtr &req,
-                     std::function<void(const drogon::HttpResponsePtr &)> &&cb)
-            { create(req, std::move(cb)); },
-            {drogon::Post});
+            "/v1/resources", on_worker(executor, create_resource_handler(service)), {drogon::Post});
 
-        auto list = list_resources_handler(service);
         drogon::app().registerHandler(
-            "/v1/resources",
-            [list](const drogon::HttpRequestPtr &req,
-                   std::function<void(const drogon::HttpResponsePtr &)> &&cb)
-            { list(req, std::move(cb)); },
-            {drogon::Get});
+            "/v1/resources", on_worker(executor, list_resources_handler(service)), {drogon::Get});
 
-        auto get_one = get_resource_handler(service);
         drogon::app().registerHandler(
-            "/v1/resources/{id}",
-            [get_one](const drogon::HttpRequestPtr &req,
-                      std::function<void(const drogon::HttpResponsePtr &)> &&cb,
-                      const std::string &id)
-            { get_one(req, std::move(cb), id); },
-            {drogon::Get});
+            "/v1/resources/{id}", on_worker(executor, get_resource_handler(service)), {drogon::Get});
 
-        auto update = update_resource_handler(service);
         drogon::app().registerHandler(
-            "/v1/resources/{id}",
-            [update](const drogon::HttpRequestPtr &req,
-                     std::function<void(const drogon::HttpResponsePtr &)> &&cb,
-                     const std::string &id)
-            { update(req, std::move(cb), id); },
-            {drogon::Patch});
+            "/v1/resources/{id}", on_worker(executor, update_resource_handler(service)), {drogon::Patch});
 
-        auto remove = delete_resource_handler(service);
         drogon::app().registerHandler(
-            "/v1/resources/{id}",
-            [remove](const drogon::HttpRequestPtr &req,
-                     std::function<void(const drogon::HttpResponsePtr &)> &&cb,
-                     const std::string &id)
-            { remove(req, std::move(cb), id); },
-            {drogon::Delete});
+            "/v1/resources/{id}", on_worker(executor, delete_resource_handler(service)), {drogon::Delete});
 
-        LOG_INFO << "Resource routes registered (5 endpoints)";
+        LOG_INFO << "Resource routes registered (5 endpoints, on "
+                 << executor->threads() << " worker threads)";
     }
 } // namespace corvus::resources
