@@ -24,6 +24,7 @@ add_executable(corvus-unit-tests
   test_cache_aside.cpp
   test_resource_model.cpp
   test_resource_repository.cpp
+  test_cursor.cpp
   test_resource_service.cpp
   test_client_context.cpp
   test_resource_handler.cpp
@@ -72,6 +73,7 @@ gtest_add_tests(
               test_cache_aside.cpp
               test_resource_model.cpp
               test_resource_repository.cpp
+              test_cursor.cpp
               test_resource_service.cpp
               test_client_context.cpp
               test_resource_handler.cpp

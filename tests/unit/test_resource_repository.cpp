@@ -307,6 +307,24 @@ TEST_F(ResourceRepositoryTest, ListPaginatesWithCursor)
             EXPECT_NE(p1.id, p2.id);
 }
 
+TEST_F(ResourceRepositoryTest, ListIsOrderedByCreationNotLastUpdate)
+{
+    std::vector<std::string> ids;
+    for (int i = 0; i < 3; ++i)
+        ids.push_back(repo_->create(client_id_, make_request("order-item-" + std::to_string(i))).id);
+
+    UpdateResourceRequest upd;
+    upd.status = "active";
+    ASSERT_TRUE(repo_->update(client_id_, ids.front(), upd));
+
+    const auto page = repo_->list(client_id_, ListFilter{});
+    std::vector<std::string> listed;
+    for (const auto &r : page.items)
+        listed.push_back(r.id);
+
+    EXPECT_EQ(listed, (std::vector<std::string>{ids[2], ids[1], ids[0]}));
+}
+
 TEST_F(ResourceRepositoryTest, ListWithMalformedCursorThrows)
 {
     ListFilter filter;

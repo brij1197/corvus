@@ -1,3 +1,4 @@
+import base64
 import time
 import pytest
 
@@ -253,6 +254,78 @@ class TestListResources:
             RESOURCES, headers=tenant.headers, params={"cursor": "not-a-cursor"}
         )
         assert resp.status_code == 400
+
+    @pytest.mark.parametrize(
+        "payload",
+        [b"not-a-timestamp|not-a-uuid", b"2026-01-01T00:00:00.000000Z", b"|"],
+    )
+    def test_well_encoded_cursor_with_junk_inside_returns_400(
+        self, api, tenant, payload
+    ):
+        """Valid base64 around garbage must be a 400, never reach SQL as a 500."""
+        cursor = base64.urlsafe_b64encode(payload).decode().rstrip("=")
+        resp = api.get(RESOURCES, headers=tenant.headers, params={"cursor": cursor})
+        assert resp.status_code == 400, resp.text
+
+    def test_cursor_is_url_safe(self, api, tenant):
+        for i in range(30):
+            create_resource(api, tenant, name=f"urlsafe-{i}")
+
+        cursor, seen = None, 0
+        for _ in range(30):
+            params = {"limit": 1, **({"cursor": cursor} if cursor else {})}
+            meta = api.get(RESOURCES, headers=tenant.headers, params=params).json()[
+                "meta"
+            ]
+            if not meta["has_more"]:
+                break
+            cursor = meta["next_cursor"]
+            assert not set(cursor) & set("+/= "), cursor
+            seen += 1
+        assert seen >= 29
+
+    def test_cursor_pasted_unencoded_still_works(self, api, tenant):
+        """A raw cursor in a hand-written URL (e.g. curl) must not be mangled."""
+        for i in range(3):
+            create_resource(api, tenant, name=f"raw-{i}")
+        first = api.get(RESOURCES, headers=tenant.headers, params={"limit": 1}).json()
+        cursor = first["meta"]["next_cursor"]
+
+        resp = api.get(f"{RESOURCES}?limit=1&cursor={cursor}", headers=tenant.headers)
+        assert resp.status_code == 200
+        assert resp.json()["data"][0]["id"] != first["data"][0]["id"]
+
+    def test_editing_an_item_mid_walk_does_not_skip_or_repeat_it(self, api, tenant):
+        """Pages follow creation order, so an update can't move an item between pages."""
+        expected = [
+            create_resource(api, tenant, name=f"edit-walk-{i}")["id"] for i in range(6)
+        ]
+
+        seen, cursor = [], None
+        for page in range(10):
+            params = {"limit": 2, **({"cursor": cursor} if cursor else {})}
+            body = api.get(RESOURCES, headers=tenant.headers, params=params).json()
+            seen.extend(r["id"] for r in body["data"])
+
+            if page == 0:
+                api.patch(
+                    f"{RESOURCES}/{expected[0]}",
+                    headers=tenant.headers,
+                    json={"status": "active"},
+                )
+            if not body["meta"]["has_more"]:
+                break
+            cursor = body["meta"]["next_cursor"]
+
+        assert len(seen) == len(set(seen)), "an item appeared on two pages"
+        assert set(seen) == set(expected), "an item was skipped"
+
+    def test_list_is_newest_first(self, api, tenant):
+        ids = [create_resource(api, tenant, name=f"order-{i}")["id"] for i in range(3)]
+        listed = [
+            r["id"] for r in api.get(RESOURCES, headers=tenant.headers).json()["data"]
+        ]
+        assert listed == list(reversed(ids))
 
 
 class TestUpdateResource:
