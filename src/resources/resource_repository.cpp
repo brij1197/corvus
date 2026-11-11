@@ -1,4 +1,5 @@
 #include "corvus/resources/resource_repository.h"
+#include "corvus/resources/cursor.h"
 #include <algorithm>
 #include <sstream>
 
@@ -29,93 +30,6 @@ namespace corvus::resources
             r.created_at = row["created_at"].as<std::string>();
             r.updated_at = row["updated_at"].as<std::string>();
             return r;
-        }
-
-        const std::string kBase64Chars =
-            "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-            "abcdefghijklmnopqrstuvwxyz"
-            "0123456789+/";
-
-        unsigned char to_uchar(char c)
-        {
-            return static_cast<unsigned char>(c);
-        }
-
-        std::string base64_encode(const std::string &in)
-        {
-            std::string out;
-            int val = 0, bits = -6;
-            for (std::size_t i = 0; i < in.size(); ++i)
-            {
-                const unsigned char c = to_uchar(in[i]);
-                val = (val << 8) + static_cast<int>(c);
-                bits += 8;
-                while (bits >= 0)
-                {
-                    const std::size_t idx =
-                        static_cast<std::size_t>((val >> bits) & 0x3F);
-                    out.push_back(kBase64Chars[idx]);
-                    bits -= 6;
-                }
-            }
-            if (bits > -6)
-            {
-                const std::size_t idx =
-                    static_cast<std::size_t>(((val << 8) >> (bits + 8)) & 0x3F);
-                out.push_back(kBase64Chars[idx]);
-            }
-            while (out.size() % 4 != 0)
-                out.push_back('=');
-            return out;
-        }
-
-        std::string base64_decode(const std::string &in)
-        {
-            std::vector<int> table(256, -1);
-            for (std::size_t i = 0; i < kBase64Chars.size(); ++i)
-            {
-                const std::size_t key = to_uchar(kBase64Chars[i]);
-                table[key] = static_cast<int>(i);
-            }
-
-            std::string out;
-            int val = 0, bits = -8;
-            for (std::size_t i = 0; i < in.size(); ++i)
-            {
-                const unsigned char c = to_uchar(in[i]);
-                if (c == '=' || table[c] == -1)
-                    continue;
-                val = (val << 6) + table[c];
-                bits += 6;
-                if (bits >= 0)
-                {
-                    out.push_back(static_cast<char>((val >> bits) & 0xFF));
-                    bits -= 8;
-                }
-            }
-            return out;
-        }
-
-        std::string encode_cursor(const std::string &updated_at, const std::string &id)
-        {
-            return base64_encode(updated_at + "|" + id);
-        }
-
-        struct CursorPosition
-        {
-            std::string updated_at;
-            std::string id;
-        };
-
-        CursorPosition decode_cursor(const std::string &cursor)
-        {
-            const auto decoded = base64_decode(cursor);
-            const auto sep = decoded.find('|');
-
-            if (sep == std::string::npos || sep == 0 || sep == decoded.size() - 1)
-                throw InvalidCursorError("cursor is malformed");
-
-            return CursorPosition{decoded.substr(0, sep), decoded.substr(sep + 1)};
         }
     } // namespace
 
@@ -183,12 +97,12 @@ namespace corvus::resources
         if (filter.cursor && !filter.cursor->empty())
         {
             const auto pos = decode_cursor(*filter.cursor);
-            sql << " AND (updated_at, id) < ("
-                << txn.quote(pos.updated_at) << "::timestamptz, "
+            sql << " AND (created_at, id) < ("
+                << txn.quote(pos.created_at) << "::timestamptz, "
                 << txn.quote(pos.id) << "::uuid)";
         }
 
-        sql << " ORDER BY updated_at DESC, id DESC LIMIT " << (page_size + 1);
+        sql << " ORDER BY created_at DESC, id DESC LIMIT " << (page_size + 1);
 
         const auto result = txn.exec(sql.str());
         txn.commit();
@@ -207,7 +121,7 @@ namespace corvus::resources
         if (has_more && !out.items.empty())
         {
             const auto &last = out.items.back();
-            out.next_cursor = encode_cursor(last.updated_at, last.id);
+            out.next_cursor = encode_cursor({last.created_at, last.id});
         }
         return out;
     }

@@ -97,6 +97,7 @@ find_package(nlohmann_json CONFIG REQUIRED)
 add_library(corvus-resources STATIC
   resources/resource.cpp
   resources/resource_repository.cpp
+  resources/cursor.cpp
   resources/resource_service.cpp
   resources/resource_routes.cpp
   resources/resource_handler.cpp

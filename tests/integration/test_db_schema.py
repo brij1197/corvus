@@ -16,11 +16,36 @@ def test_schema_migrations_table_exists(pg_cursor):
     assert pg_cursor.fetchone()[0] is True
 
 
-def test_both_migrations_applied(pg_cursor):
+def test_all_migrations_applied(pg_cursor):
     pg_cursor.execute("SELECT version FROM schema_migrations ORDER BY version")
     versions = [row[0] for row in pg_cursor.fetchall()]
-    assert 1 in versions, "migration 0001 not applied"
-    assert 2 in versions, "migration 0002 not applied"
+    for v in (1, 2, 3):
+        assert v in versions, f"migration {v:04d} not applied"
+
+
+def test_list_query_is_served_by_an_index_without_sorting(pg_cursor):
+    """The list query must walk resources_client_created_idx, not sort."""
+    pg_cursor.execute("SET enable_seqscan = off")
+    pg_cursor.execute("SET enable_bitmapscan = off")
+    try:
+        pg_cursor.execute("""
+            EXPLAIN SELECT id FROM resources
+            WHERE client_id = '00000000-0000-0000-0000-000000000001'
+              AND (created_at, id) < ('2026-01-01T00:00:00Z'::timestamptz,
+                                      '00000000-0000-0000-0000-000000000002'::uuid)
+            ORDER BY created_at DESC, id DESC LIMIT 51
+            """)
+        plan = "\n".join(row[0] for row in pg_cursor.fetchall())
+    finally:
+        pg_cursor.execute("RESET enable_seqscan")
+        pg_cursor.execute("RESET enable_bitmapscan")
+    assert "resources_client_created_idx" in plan, plan
+    assert "Sort" not in plan, plan
+
+
+def test_redundant_client_index_is_gone(pg_cursor):
+    pg_cursor.execute("SELECT to_regclass('public.resources_client_idx')")
+    assert pg_cursor.fetchone()[0] is None
 
 
 def test_all_expected_tables_exist(pg_cursor):
