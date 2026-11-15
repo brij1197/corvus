@@ -105,7 +105,7 @@ jobs:
       - name: Bootstrap vcpkg
         run: |
           if [ ! -d "${{ github.workspace }}/vcpkg" ]; then
-            git clone https://github.com/microsoft/vcpkg.git
+            git clone --depth 1 --branch 2026.10.16 https://github.com/microsoft/vcpkg.git
             ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
           fi
         env:

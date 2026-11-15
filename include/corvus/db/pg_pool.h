@@ -28,6 +28,7 @@ namespace corvus::db
         std::size_t min_connections{2};
         std::size_t max_connections{10};
         std::chrono::milliseconds acquire_timeout{5000};
+        std::function<std::unique_ptr<pqxx::connection>(const std::string &)> connect{};
     };
 
     class PgConnection

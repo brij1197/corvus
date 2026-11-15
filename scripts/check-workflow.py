@@ -1,4 +1,7 @@
+import json
+import re
 import sys
+from pathlib import Path
 
 import yaml
 
@@ -16,8 +19,38 @@ def find(job, needle):
     return None
 
 
-def main():
+def vcpkg_pin_failures():
+    """vcpkg must be pinned to one tag everywhere, matching vcpkg.json's baseline."""
     failures = []
+    m = re.search(
+        r"^ARG VCPKG_TAG=(\S+)$",
+        Path("deploy/docker/Dockerfile").read_text(),
+        re.MULTILINE,
+    )
+    if not m or m.group(1) in ("master", "main"):
+        return ["deploy/docker/Dockerfile must pin VCPKG_TAG to a release tag."]
+    tag = m.group(1)
+
+    for wf in (".github/workflows/ci.yml", ".github/workflows/codeql.yml"):
+        text = Path(wf).read_text()
+        if "microsoft/vcpkg.git" in text and f"--branch {tag} " not in text:
+            failures.append(
+                f"{wf} must clone vcpkg with --branch {tag}, like the Dockerfile."
+            )
+
+    manifest = json.loads(Path("vcpkg.json").read_text())
+    if not re.fullmatch(r"[0-9a-f]{40}", manifest.get("builtin-baseline", "")):
+        failures.append("vcpkg.json needs a builtin-baseline commit SHA.")
+    if tag not in manifest.get("$comment", ""):
+        failures.append(
+            f"vcpkg.json's $comment must name tag {tag}: the baseline has to be "
+            "that tag's commit, so update them together."
+        )
+    return failures
+
+
+def main():
+    failures = vcpkg_pin_failures()
 
     start = find("integration-test", "Start stack")
     if start is None:

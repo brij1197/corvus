@@ -74,8 +74,15 @@ namespace corvus::db
 
     PgConnection PgPool::acquire()
     {
-        std::unique_lock<std::mutex> lock(mutex_);
+        auto wrap = [this](std::unique_ptr<pqxx::connection> conn)
+        {
+            return PgConnection(
+                std::move(conn),
+                [this](std::unique_ptr<pqxx::connection> rc)
+                { return_connection(std::move(rc)); });
+        };
 
+        std::unique_lock<std::mutex> lock(mutex_);
         const auto deadline = std::chrono::steady_clock::now() + config_.acquire_timeout;
 
         while (true)
@@ -84,37 +91,28 @@ namespace corvus::db
             {
                 auto conn = std::move(idle_.front());
                 idle_.pop();
-
-                if (!conn->is_open())
-                {
-                    try
-                    {
-                        conn = make_connection();
-                    }
-                    catch (...)
-                    {
-                        --total_;
-                        continue;
-                    }
-                }
-                return PgConnection(
-                    std::move(conn),
-                    [this](std::unique_ptr<pqxx::connection> rc)
-                    {
-                        return_connection(std::move(rc));
-                    });
+                if (conn->is_open())
+                    return wrap(std::move(conn));
+                --total_;
+                continue;
             }
 
             if (total_ < config_.max_connections)
             {
-                auto conn = make_connection();
                 ++total_;
-                return PgConnection(
-                    std::move(conn),
-                    [this](std::unique_ptr<pqxx::connection> rc)
-                    {
-                        return_connection(std::move(rc));
-                    });
+                lock.unlock();
+                try
+                {
+                    return wrap(make_connection());
+                }
+                catch (...)
+                {
+                    lock.lock();
+                    --total_;
+                    lock.unlock();
+                    cv_.notify_one();
+                    throw;
+                }
             }
 
             if (cv_.wait_until(lock, deadline) == std::cv_status::timeout)
@@ -140,6 +138,8 @@ namespace corvus::db
     {
         try
         {
+            if (config_.connect)
+                return config_.connect(config_.connection_string);
             return std::make_unique<pqxx::connection>(config_.connection_string);
         }
         catch (const std::exception &e)

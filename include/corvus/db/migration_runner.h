@@ -19,11 +19,17 @@ namespace corvus::db
         using std::runtime_error::runtime_error;
     };
 
+    bool manages_own_transaction(const std::string &sql);
+
     class MigrationRunner
     {
+    public:
+        static constexpr long long kLockKey = 0x636f72767573;
+
     private:
         void ensure_migrations_table(pqxx::connection &conn);
         void apply(pqxx::connection &conn, const Migration &m);
+        std::vector<long long> applied_versions(pqxx::connection &conn);
 
         std::shared_ptr<PgPool> pool_;
         std::filesystem::path dir_;
