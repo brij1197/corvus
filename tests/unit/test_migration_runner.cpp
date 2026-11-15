@@ -143,3 +143,178 @@ TEST(MigrationStructTest, DefaultVersionIsZero)
     Migration m;
     EXPECT_EQ(m.version, 0);
 }
+
+#include <atomic>
+#include <random>
+#include <thread>
+
+TEST(ManagesOwnTransactionTest, DetectsTransactionControl)
+{
+    EXPECT_TRUE(manages_own_transaction("BEGIN;\nCREATE TABLE t (x int);\nCOMMIT;"));
+    EXPECT_TRUE(manages_own_transaction("create table t (x int);\n  commit ;"));
+    EXPECT_TRUE(manages_own_transaction("START TRANSACTION; SELECT 1;"));
+    EXPECT_TRUE(manages_own_transaction("SELECT 1; ROLLBACK"));
+}
+
+TEST(ManagesOwnTransactionTest, IgnoresFunctionBodiesCommentsAndStrings)
+{
+    EXPECT_FALSE(manages_own_transaction(R"(
+        -- BEGIN; in a comment
+        /* COMMIT; in a block comment */
+        CREATE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN
+            RETURN NEW;
+        END;
+        $$;
+        CREATE FUNCTION g() RETURNS int LANGUAGE plpgsql AS $body$
+        BEGIN RETURN 1; END;
+        $body$;
+        INSERT INTO notes VALUES ('BEGIN; COMMIT;');
+        CREATE TABLE "commit" (x int);
+    )"));
+}
+
+TEST(ManagesOwnTransactionTest, ShippedMigrationsAreClean)
+{
+    const fs::path dir = fs::path(CORVUS_SOURCE_DIR) / "db" / "migrations";
+    ASSERT_TRUE(fs::exists(dir)) << dir;
+    for (const auto &entry : fs::directory_iterator(dir))
+    {
+        if (entry.path().extension() != ".sql")
+            continue;
+        std::ifstream f(entry.path());
+        const std::string sql((std::istreambuf_iterator<char>(f)), {});
+        EXPECT_FALSE(manages_own_transaction(sql)) << entry.path().filename();
+    }
+}
+
+namespace
+{
+    class LiveMigrationTest : public ::testing::Test
+    {
+    protected:
+        void SetUp() override
+        {
+            schema_ = "mtest_" + std::to_string(std::random_device{}());
+            try
+            {
+                pqxx::connection c(connection_string_from_env());
+                pqxx::work(c).exec("SELECT 1");
+                pqxx::nontransaction(c).exec("CREATE SCHEMA " + schema_);
+            }
+            catch (const std::exception &)
+            {
+                GTEST_SKIP() << "Postgres not reachable";
+            }
+            dir_ = fs::temp_directory_path() / schema_;
+            fs::create_directories(dir_);
+        }
+
+        void TearDown() override
+        {
+            if (!dir_.empty())
+                fs::remove_all(dir_);
+            try
+            {
+                pqxx::connection c(connection_string_from_env());
+                pqxx::nontransaction(c).exec("DROP SCHEMA IF EXISTS " + schema_ + " CASCADE");
+            }
+            catch (...)
+            {
+            }
+        }
+
+        std::shared_ptr<PgPool> make_pool(std::size_t max = 2)
+        {
+            PoolConfig cfg;
+            cfg.connection_string = connection_string_from_env() + " options=-csearch_path=" + schema_;
+            cfg.min_connections = 1;
+            cfg.max_connections = max;
+            return std::make_shared<PgPool>(cfg);
+        }
+
+        void write(const std::string &name, const std::string &sql)
+        {
+            std::ofstream(dir_ / name) << sql;
+        }
+
+        long long count(const std::string &sql)
+        {
+            pqxx::connection c(connection_string_from_env() + " options=-csearch_path=" + schema_);
+            return pqxx::work(c).exec(sql)[0][0].as<long long>();
+        }
+
+        std::string schema_;
+        fs::path dir_;
+    };
+} // namespace
+
+TEST_F(LiveMigrationTest, ConcurrentRunnersApplyEachMigrationOnce)
+{
+    write("0001_slow.sql", "CREATE TABLE marks (n int); SELECT pg_sleep(1); INSERT INTO marks VALUES (1);");
+    write("0002_more.sql", "INSERT INTO marks VALUES (2);");
+
+    std::atomic<int> applied{0}, failures{0};
+    auto run = [&]
+    {
+        try
+        {
+            applied += MigrationRunner(make_pool(), dir_).migrate();
+        }
+        catch (const std::exception &e)
+        {
+            ++failures;
+            ADD_FAILURE() << e.what();
+        }
+    };
+    std::thread a(run), b(run);
+    a.join();
+    b.join();
+
+    EXPECT_EQ(failures, 0);
+    EXPECT_EQ(applied, 2) << "each migration should be applied by exactly one runner";
+    EXPECT_EQ(count("SELECT count(*) FROM marks"), 2);
+    EXPECT_EQ(count("SELECT count(*) FROM schema_migrations"), 2);
+}
+
+TEST_F(LiveMigrationTest, FailingMigrationLeavesNoPartialSchema)
+{
+    write("0001_half.sql", "CREATE TABLE first_half (x int); SELECT * FROM no_such_table;");
+
+    EXPECT_THROW(MigrationRunner(make_pool(), dir_).migrate(), MigrationError);
+
+    EXPECT_EQ(count("SELECT count(*) FROM information_schema.tables "
+                    "WHERE table_schema = current_schema() AND table_name = 'first_half'"),
+              0)
+        << "the table from the first statement must be rolled back";
+    EXPECT_EQ(count("SELECT count(*) FROM schema_migrations"), 0);
+}
+
+TEST_F(LiveMigrationTest, FixedMigrationIsRetriedOnNextRun)
+{
+    write("0001_t.sql", "CREATE TABLE t (x int); SELECT * FROM no_such_table;");
+    EXPECT_THROW(MigrationRunner(make_pool(), dir_).migrate(), MigrationError);
+
+    write("0001_t.sql", "CREATE TABLE t (x int);");
+    EXPECT_EQ(MigrationRunner(make_pool(), dir_).migrate(), 1);
+}
+
+TEST_F(LiveMigrationTest, LockIsReleasedAfterAFailure)
+{
+    write("0001_bad.sql", "SELECT * FROM no_such_table;");
+    auto pool = make_pool(1);
+    EXPECT_THROW(MigrationRunner(pool, dir_).migrate(), MigrationError);
+
+    pqxx::connection other(connection_string_from_env());
+    const auto got = pqxx::work(other)
+                         .exec("SELECT pg_try_advisory_lock(" + std::to_string(MigrationRunner::kLockKey) + ")")[0][0]
+                         .as<bool>();
+    EXPECT_TRUE(got) << "a failed run must not leave the migration lock held";
+    pqxx::nontransaction(other).exec("SELECT pg_advisory_unlock(" + std::to_string(MigrationRunner::kLockKey) + ")");
+}
+
+TEST_F(LiveMigrationTest, RejectsFilesThatManageTheirOwnTransaction)
+{
+    write("0001_old_style.sql", "BEGIN; CREATE TABLE t (x int); COMMIT;");
+    EXPECT_THROW(MigrationRunner(make_pool(), dir_).discover(), MigrationError);
+}

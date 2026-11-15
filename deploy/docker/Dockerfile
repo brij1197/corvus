@@ -28,7 +28,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && pip3 install --no-cache-dir gcovr
 
 # ── vcpkg - pinned to a release tag for reproducibility ───────────────────
-ARG VCPKG_TAG=master
+ARG VCPKG_TAG=2026.10.16
 RUN git clone --depth 1 --branch ${VCPKG_TAG} \
     https://github.com/microsoft/vcpkg.git $VCPKG_ROOT \
     && $VCPKG_ROOT/bootstrap-vcpkg.sh -disableMetrics

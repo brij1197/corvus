@@ -85,3 +85,86 @@ TEST(ConnectionStringTest, DefaultHostIsLocalhost)
     }
     EXPECT_NE(connection_string_from_env().find("host=localhost"), std::string::npos);
 }
+
+#include <atomic>
+#include <chrono>
+#include <future>
+#include <thread>
+
+namespace
+{
+    bool postgres_available()
+    {
+        try
+        {
+            pqxx::connection c(connection_string_from_env());
+            return c.is_open();
+        }
+        catch (...)
+        {
+            return false;
+        }
+    }
+} // namespace
+
+TEST(PgPoolLiveTest, SlowConnectDoesNotBlockOtherAcquiresOrReturns)
+{
+    if (!postgres_available())
+        GTEST_SKIP() << "Postgres not reachable";
+    using namespace std::chrono_literals;
+
+    std::atomic<bool> slow{false};
+    PoolConfig cfg;
+    cfg.connection_string = connection_string_from_env();
+    cfg.min_connections = 1;
+    cfg.max_connections = 3;
+    cfg.connect = [&](const std::string &cs)
+    {
+        if (slow)
+            std::this_thread::sleep_for(1500ms);
+        return std::make_unique<pqxx::connection>(cs);
+    };
+    PgPool pool(cfg);
+
+    auto held = std::make_unique<PgConnection>(pool.acquire());
+    slow = true;
+
+    auto opener = std::async(std::launch::async, [&]
+                             { return pool.acquire(); });
+    std::this_thread::sleep_for(100ms);
+    const auto start = std::chrono::steady_clock::now();
+    held.reset();
+    auto again = pool.acquire();
+    const auto waited = std::chrono::steady_clock::now() - start;
+
+    EXPECT_LT(waited, 500ms) << "acquire waited behind another thread's connect";
+    auto opened = opener.get();
+    EXPECT_EQ(pool.size(), 2u);
+}
+
+TEST(PgPoolLiveTest, FailedConnectFreesItsSlot)
+{
+    if (!postgres_available())
+        GTEST_SKIP() << "Postgres not reachable";
+
+    std::atomic<bool> fail{false};
+    PoolConfig cfg;
+    cfg.connection_string = connection_string_from_env();
+    cfg.min_connections = 1;
+    cfg.max_connections = 2;
+    cfg.connect = [&](const std::string &cs)
+    {
+        if (fail)
+            throw std::runtime_error("connection refused");
+        return std::make_unique<pqxx::connection>(cs);
+    };
+    PgPool pool(cfg);
+
+    auto held = pool.acquire();
+    fail = true;
+    EXPECT_THROW(pool.acquire(), DbConfigError);
+    EXPECT_EQ(pool.size(), 1u) << "the failed connect must not keep a slot";
+
+    fail = false;
+    EXPECT_NO_THROW(pool.acquire());
+}

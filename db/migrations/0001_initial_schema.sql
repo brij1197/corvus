@@ -1,7 +1,4 @@
 -- Migration: 0001_initial_schema
-
-BEGIN;
-
 CREATE TABLE IF NOT EXISTS schema_migrations (
     version BIGINT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -130,5 +127,3 @@ CREATE TRIGGER policies_updated_at
 
 INSERT INTO schema_migrations (version, name)
 VALUES (1, '0001_initial_schema');
-
-COMMIT;

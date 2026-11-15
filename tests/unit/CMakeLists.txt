@@ -50,6 +50,10 @@ target_link_libraries(corvus-unit-tests PRIVATE
 
 target_compile_features(corvus-unit-tests PRIVATE cxx_std_20)
 
+target_compile_definitions(corvus-unit-tests PRIVATE
+  CORVUS_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+)
+
 include(GoogleTest)
 
 gtest_add_tests(
@@ -89,5 +93,10 @@ set_tests_properties(
   ApiKeyValidatorTest.WrongPasswordFailsAtStartup
   ApiKeyValidatorTest.RedisOutageFallsBackToPostgres
   ApiKeyValidatorTest.RecoversWhenParkedConnectionsDie
+  LiveMigrationTest.ConcurrentRunnersApplyEachMigrationOnce
+  LiveMigrationTest.FailingMigrationLeavesNoPartialSchema
+  LiveMigrationTest.FixedMigrationIsRetriedOnNextRun
+  LiveMigrationTest.LockIsReleasedAfterAFailure
+  LiveMigrationTest.RejectsFilesThatManageTheirOwnTransaction
   PROPERTIES RUN_SERIAL TRUE
 )

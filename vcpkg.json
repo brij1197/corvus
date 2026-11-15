@@ -2,6 +2,8 @@
   "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg/master/scripts/vcpkg.schema.json",
   "name": "corvus",
   "version": "0.1.0",
+  "$comment": "builtin-baseline is the commit of vcpkg tag 2026.10.16. Change both together with VCPKG_TAG in deploy/docker/Dockerfile and the workflows; scripts/check-workflow.py enforces it.",
+  "builtin-baseline": "9eec002df1cd109f8f104cd966a763daf9751489",
   "dependencies": [
     "drogon",
     "gtest",

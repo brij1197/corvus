@@ -1,4 +1,3 @@
-BEGIN;
 -- 1. Enable the TimescaleDB extension
 CREATE EXTENSION IF NOT EXISTS timescaledb;
 -- 2. Convert audit_log into a hypertable
@@ -20,4 +19,3 @@ SELECT add_retention_policy(
         INTERVAL '90 days',
         if_not_exists => TRUE
     );
-COMMIT;
