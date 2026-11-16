@@ -38,12 +38,29 @@ target_link_libraries(corvus-db PUBLIC
 
 target_compile_features(corvus-db PUBLIC cxx_std_20)
 
+find_package(prometheus-cpp CONFIG REQUIRED)
+
+add_library(corvus-metrics STATIC
+  metrics/metrics.cpp
+)
+
+target_include_directories(corvus-metrics PUBLIC
+  ${CMAKE_SOURCE_DIR}/include
+)
+
+target_link_libraries(corvus-metrics PUBLIC
+  prometheus-cpp::core
+)
+
+target_compile_features(corvus-metrics PUBLIC cxx_std_20)
+
 add_library(corvus-gateway STATIC
   gateway/router.cpp
   gateway/health_handler.cpp
   gateway/health_probe.cpp
   gateway/blocking_executor.cpp
   gateway/offload.cpp
+  gateway/metrics_middleware.cpp
   gateway/readiness_handler.cpp
   gateway/not_found_handler.cpp
   gateway/rate_limiter.cpp
@@ -56,6 +73,7 @@ target_include_directories(corvus-gateway PUBLIC
 )
 
 target_link_libraries(corvus-gateway PUBLIC
+  corvus-metrics
   corvus-api
   corvus-db
   Drogon::Drogon

@@ -194,7 +194,7 @@ namespace corvus::gateway
                       drogon::AdviceChainCallback &&next)
             {
                 const std::string &path = req->getPath();
-                if (path == "/health" || path == "/ready")
+                if (path == "/health" || path == "/ready" || path == "/metrics")
                 {
                     next();
                     return;
