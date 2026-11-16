@@ -32,12 +32,16 @@ namespace corvus::metrics
           http_requests_(prometheus::BuildCounter()
                              .Name("http_requests_total")
                              .Help("HTTP requests handled, by endpoint, method and status.")
-                             .Register(*register_))
+                             .Register(*registry_)),
+          http_duration_(prometheus::BuildHistogram()
+                             .Name("http_request_duration_seconds")
+                             .Help("Time from receiving a request to sending its response.")
+                             .Register(*registry_))
     {
         prometheus::BuildGauge()
             .Name("corvus_build_info")
             .Help("Always 1; the version label identifies the running build.")
-            .Register("*registry_")
+            .Register(*registry_)
             .Add({{"version", version}})
             .Set(1);
     }
