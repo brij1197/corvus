@@ -1,4 +1,6 @@
 #include "corvus/resources/resource_service.h"
+#include <algorithm>
+#include <cctype>
 #include <drogon/drogon.h>
 #include <pqxx/pqxx>
 
@@ -12,7 +14,11 @@ namespace corvus::resources
 
     std::string ResourceService::cache_key(const std::string &client_id, const std::string &id) const
     {
-        return "resource:" + client_id + ":" + id;
+        std::string key = "resource:" + client_id + ":" + id;
+        std::transform(key.begin(), key.end(), key.begin(),
+                       [](unsigned char c)
+                       { return static_cast<char>(std::tolower(c)); });
+        return key;
     }
 
     Resource ResourceService::create(const std::string &client_id, const CreateResourceRequest &req)

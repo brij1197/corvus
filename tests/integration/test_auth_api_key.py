@@ -1,4 +1,5 @@
 import time
+import uuid
 
 from conftest import make_jwt, redis_key, sha256_hex
 
@@ -123,7 +124,7 @@ class TestApiKeyValid:
         assert resp.status_code == 404
 
     def test_key_with_jwt_for_another_client_returns_401(self, api, reader):
-        token = make_jwt(client_id="someone-else", scope="read write")
+        token = make_jwt(client_id=str(uuid.uuid4()), scope="read write")
         resp = api.get(
             "/v1/anything",
             headers={**reader.key_headers, "Authorization": f"Bearer {token}"},

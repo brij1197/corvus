@@ -2,6 +2,8 @@ import pytest
 import httpx
 from conftest import make_jwt, make_expired_jwt
 
+JWT_ONLY_CLIENT = "0a0a0a0a-0a0a-4a0a-8a0a-0a0a0a0a0a0a"
+
 
 class TestJwtMissingHeader:
     def test_missing_auth_header_returns_401(self, api):
@@ -93,14 +95,37 @@ class TestJwtValidToken:
         assert "client_id" in resp.json()["error"]["message"]
 
     def test_client_bound_token_passes_auth(self, api):
-        token = make_jwt(client_id="jwt-only-client", scope="read")
+        token = make_jwt(client_id=JWT_ONLY_CLIENT, scope="read")
         resp = api.get("/v1/anything", headers={"Authorization": f"Bearer {token}"})
         # Auth passes; the route itself doesn't exist.
         assert resp.status_code == 404
         assert resp.json()["error"]["code"] == "NOT_FOUND"
 
+    @pytest.mark.parametrize(
+        "client_id",
+        ["not-a-uuid", "", "1234", "' OR '1'='1", "0a0a0a0a0a0a4a0a8a0a0a0a0a0a0a0a"],
+    )
+    def test_non_uuid_client_id_is_401_not_500(self, api, client_id):
+        """Used to reach a uuid column in Postgres and come back as a 500."""
+        token = make_jwt(client_id=client_id, scope="read write")
+        resp = api.get("/v1/resources", headers={"Authorization": f"Bearer {token}"})
+        assert resp.status_code == 401, resp.text
+
+    def test_uppercase_client_id_is_the_same_tenant(self, api, tenant):
+        token = make_jwt(client_id=tenant.client_id.upper(), scope="read write")
+        headers = {"Authorization": f"Bearer {token}"}
+        created = api.post(
+            "/v1/resources",
+            headers=tenant.headers,
+            json={"kind": "server", "name": "case"},
+        ).json()["data"]
+
+        resp = api.get(f"/v1/resources/{created['id']}", headers=headers)
+        assert resp.status_code == 200
+        assert resp.json()["data"]["client_id"] == tenant.client_id
+
     def test_token_without_write_scope_cannot_write(self, api):
-        token = make_jwt(client_id="jwt-only-client", scope="read")
+        token = make_jwt(client_id=JWT_ONLY_CLIENT, scope="read")
         resp = api.post(
             "/v1/anything", headers={"Authorization": f"Bearer {token}"}, json={}
         )
@@ -108,7 +133,7 @@ class TestJwtValidToken:
         assert resp.json()["error"]["code"] == "FORBIDDEN"
 
     def test_token_with_no_scope_cannot_read(self, api):
-        token = make_jwt(client_id="jwt-only-client")
+        token = make_jwt(client_id=JWT_ONLY_CLIENT)
         resp = api.get("/v1/anything", headers={"Authorization": f"Bearer {token}"})
         assert resp.status_code == 403
 

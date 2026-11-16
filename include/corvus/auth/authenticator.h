@@ -46,6 +46,8 @@ namespace corvus::auth
 
     std::set<std::string> parse_scopes(std::string_view raw);
 
+    bool is_uuid(std::string_view value);
+
     std::string required_scope(std::string_view method);
 
     AuthResult authenticate(const Credentials &creds,
