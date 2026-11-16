@@ -380,6 +380,21 @@ class TestUpdateResource:
         api.patch(url, headers=tenant.headers, json={"status": "changed"})
         assert not redis.exists(cache_key)
 
+    def test_update_is_not_stale_through_an_uppercase_id(self, api, tenant):
+        """
+        "ABC..." and "abc..." are the same resource. A read cached under one
+        spelling must not survive a write made through the other.
+        """
+        created = create_resource(api, tenant, name="u-case", status="old")
+        lower = f"{RESOURCES}/{created['id']}"
+        upper = f"{RESOURCES}/{created['id'].upper()}"
+
+        assert api.get(upper, headers=tenant.headers).json()["data"]["status"] == "old"
+        api.patch(lower, headers=tenant.headers, json={"status": "new"})
+
+        assert api.get(upper, headers=tenant.headers).json()["data"]["status"] == "new"
+        assert api.get(lower, headers=tenant.headers).json()["data"]["status"] == "new"
+
     def test_get_after_update_is_not_stale(self, api, tenant):
         """The read that follows an update must not serve the pre-update body."""
         created = create_resource(api, tenant, name="u-stale")

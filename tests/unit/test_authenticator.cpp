@@ -5,14 +5,17 @@ using namespace corvus::auth;
 
 namespace
 {
+    const std::string kClientA = "11111111-1111-4111-8111-111111111111";
+    const std::string kClientB = "22222222-2222-4222-8222-222222222222";
+
     const KeyCheck keys = [](const std::string &raw) -> ApiKeyInfo
     {
         if (raw == "key-a-rw")
-            return {"client-a", "read,write"};
+            return {kClientA, "read,write"};
         if (raw == "key-a-ro")
-            return {"client-a", "read"};
+            return {kClientA, "read"};
         if (raw == "key-b-rw")
-            return {"client-b", "read write"};
+            return {kClientB, "read write"};
         if (raw == "key-outage")
             throw ApiKeyBackendError("redis down");
         throw ApiKeyValidationError("unknown");
@@ -21,11 +24,11 @@ namespace
     const JwtCheck tokens = [](const std::string &token) -> Claims
     {
         if (token == "tok-a-rw")
-            return {"user", "iss", "client-a", "read write"};
+            return {"user", "iss", kClientA, "read write"};
         if (token == "tok-a-ro")
-            return {"user", "iss", "client-a", "read"};
+            return {"user", "iss", kClientA, "read"};
         if (token == "tok-b-rw")
-            return {"user", "iss", "client-b", "read write"};
+            return {"user", "iss", kClientB, "read write"};
         if (token == "tok-unbound")
             return {"user", "iss", std::nullopt, "read write"};
         throw JwtValidationError("bad token");
@@ -54,7 +57,7 @@ namespace
 TEST(AuthenticatorTest, ApiKeyAloneAuthenticates)
 {
     const auto p = ok(run("GET", "", "key-a-rw"));
-    EXPECT_EQ(p.client_id, "client-a");
+    EXPECT_EQ(p.client_id, kClientA);
     EXPECT_TRUE(p.via_api_key);
     EXPECT_FALSE(p.via_jwt);
 }
@@ -62,7 +65,7 @@ TEST(AuthenticatorTest, ApiKeyAloneAuthenticates)
 TEST(AuthenticatorTest, ClientBoundJwtAloneAuthenticates)
 {
     const auto p = ok(run("GET", "Bearer tok-a-rw", ""));
-    EXPECT_EQ(p.client_id, "client-a");
+    EXPECT_EQ(p.client_id, kClientA);
     EXPECT_TRUE(p.via_jwt);
 }
 
@@ -94,7 +97,7 @@ TEST(AuthenticatorTest, MalformedAuthorizationHeaderIs401)
 TEST(AuthenticatorTest, MatchingKeyAndJwtAuthenticate)
 {
     const auto p = ok(run("POST", "Bearer tok-a-rw", "key-a-rw"));
-    EXPECT_EQ(p.client_id, "client-a");
+    EXPECT_EQ(p.client_id, kClientA);
     EXPECT_TRUE(p.via_api_key && p.via_jwt);
 }
 
@@ -164,4 +167,40 @@ TEST(RequiredScopeTest, MapsMethods)
     EXPECT_EQ(required_scope("POST"), "write");
     EXPECT_EQ(required_scope("PATCH"), "write");
     EXPECT_EQ(required_scope("DELETE"), "write");
+}
+TEST(AuthenticatorTest, JwtWithNonUuidClientIdIs401)
+{
+    const JwtCheck bad = [](const std::string &) -> Claims
+    { return {"user", "iss", std::string("not-a-uuid"), "read write"}; };
+    const auto r = authenticate({"GET", "Bearer t", ""}, bad, keys);
+    EXPECT_EQ(failure(r), AuthFailure::unauthorized);
+}
+
+TEST(AuthenticatorTest, JwtClientIdIsNormalizedToLowercase)
+{
+    const JwtCheck upper = [](const std::string &) -> Claims
+    { return {"user", "iss", std::string("AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA"), "read"}; };
+    const auto p = ok(authenticate({"GET", "Bearer t", ""}, upper, keys));
+    EXPECT_EQ(p.client_id, "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+}
+
+TEST(AuthenticatorTest, KeyAndJwtMatchRegardlessOfUuidCase)
+{
+    const JwtCheck upper = [](const std::string &) -> Claims
+    { return {"user", "iss", std::string("AAAAAAAA-1111-4111-8111-111111111111"), "read write"}; };
+    const KeyCheck key = [](const std::string &) -> ApiKeyInfo
+    { return {"aaaaaaaa-1111-4111-8111-111111111111", "read"}; };
+    const auto p = ok(authenticate({"GET", "Bearer t", "k"}, upper, key));
+    EXPECT_EQ(p.client_id, "aaaaaaaa-1111-4111-8111-111111111111");
+}
+
+TEST(IsUuidTest, AcceptsOnlyTheCanonicalForm)
+{
+    EXPECT_TRUE(is_uuid("3f2b8c1e-9a4d-4e6f-8b2a-1c3d5e7f9a0b"));
+    EXPECT_TRUE(is_uuid("3F2B8C1E-9A4D-4E6F-8B2A-1C3D5E7F9A0B"));
+    EXPECT_FALSE(is_uuid(""));
+    EXPECT_FALSE(is_uuid("not-a-uuid"));
+    EXPECT_FALSE(is_uuid("3f2b8c1e9a4d4e6f8b2a1c3d5e7f9a0b"));
+    EXPECT_FALSE(is_uuid("3f2b8c1e-9a4d-4e6f-8b2a-1c3d5e7f9a0b' OR '1'='1"));
+    EXPECT_FALSE(is_uuid("zf2b8c1e-9a4d-4e6f-8b2a-1c3d5e7f9a0b"));
 }

@@ -1,5 +1,6 @@
 #include "corvus/auth/authenticator.h"
 #include <algorithm>
+#include <cctype>
 #include <iterator>
 
 namespace corvus::auth
@@ -10,6 +11,19 @@ namespace corvus::auth
 
         constexpr std::string_view kBearer = "Bearer ";
     } // namespace
+
+    bool is_uuid(std::string_view value)
+    {
+        if (value.size() != 36)
+            return false;
+        for (std::size_t i = 0; i < value.size(); ++i)
+        {
+            const bool dash = (i == 8 || i == 13 || i == 18 || i == 23);
+            if (dash ? value[i] != '-' : !std::isxdigit(static_cast<unsigned char>(value[i])))
+                return false;
+        }
+        return true;
+    }
 
     std::set<std::string> parse_scopes(std::string_view raw)
     {
@@ -90,6 +104,14 @@ namespace corvus::auth
 
             if (!claims.client_id || claims.client_id->empty())
                 return unauthorized("Token is not bound to a client (missing client_id claim)");
+
+            if (!is_uuid(*claims.client_id))
+                return unauthorized("Token's client_id claim is not a valid client id");
+
+            std::transform(claims.client_id->begin(), claims.client_id->end(),
+                           claims.client_id->begin(),
+                           [](unsigned char c)
+                           { return static_cast<char>(std::tolower(c)); });
 
             const auto token_scopes = parse_scopes(claims.scope);
             if (principal.via_api_key)
