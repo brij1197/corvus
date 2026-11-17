@@ -1,5 +1,6 @@
 #include <drogon/drogon.h>
 #include "corvus/gateway/router.h"
+#include "corvus/gateway/metrics_middleware.h"
 #include "corvus/gateway/blocking_executor.h"
 #include "corvus/gateway/health_probe.h"
 #include "corvus/gateway/rate_limiter.h"
@@ -160,7 +161,11 @@ int main(int argc, char *argv[])
     auto executor = std::make_shared<corvus::gateway::BlockingExecutor>(
         kWorkerThreads, kMaxQueuedRequests);
 
+    auto metrics = std::make_shared<corvus::metrics::Metrics>(
+        std::string{corvus::version::string()});
+
     corvus::gateway::register_request_id_middleware();
+    corvus::gateway::register_http_metrics(metrics);
     corvus::gateway::register_request_size_limit_middleware();
 
     auto rate_limiter = std::make_shared<corvus::gateway::RateLimiter>();
@@ -173,6 +178,7 @@ int main(int argc, char *argv[])
 
     // Register routes
     corvus::gateway::register_routes();
+    corvus::gateway::register_metrics_route(metrics);
     corvus::gateway::register_readiness_route(
         pg_pool, corvus::db::redis_config_from_env(), executor);
     corvus::resources::register_resource_routes(resource_service, executor);

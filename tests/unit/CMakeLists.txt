@@ -9,6 +9,7 @@ add_executable(corvus-unit-tests
   test_health_handler.cpp
   test_health_probe.cpp
   test_blocking_executor.cpp
+  test_metrics.cpp
   test_router.cpp
   test_envelope.cpp
   test_jwt_validator.cpp
@@ -62,6 +63,7 @@ gtest_add_tests(
               test_health_handler.cpp
               test_health_probe.cpp
               test_blocking_executor.cpp
+              test_metrics.cpp
               test_router.cpp
               test_envelope.cpp
               test_jwt_validator.cpp

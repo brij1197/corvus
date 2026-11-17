@@ -10,6 +10,10 @@
     "jwt-cpp",
     "nlohmann-json",
     "hiredis",
-    "openssl"
+    "openssl",
+    {
+      "name": "prometheus-cpp",
+      "default-features": false
+    }
   ]
 }
